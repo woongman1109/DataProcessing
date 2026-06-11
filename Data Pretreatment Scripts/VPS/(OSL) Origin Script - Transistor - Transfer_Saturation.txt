@@ -1,0 +1,180 @@
+/* Organic Semiconductor Lab, SAINT, SKKU */
+/* Source code copyright to Taewoong Yoon */
+/* +++++ Email: TWYoon.rs@gmail.com +++++ */
+/* ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ */
+/* ░░░░░░░█████░░░░███████░░██░░░░░░░░░░░ */
+/* ░░░░░██░░░░░██░██░░░░░██░██░░░░░░░░░░░ */
+/* ░░░░░█░░░░░░░█░███░░░░░░░██░░░░░░░░░░░ */
+/* ░░░░░█░░░░░░░█░░░█████░░░██░░░░░░░░░░░ */
+/* ░░░░░█░░░░░░░█░░░░░░░███░██░░░░░░░░░░░ */
+/* ░░░░░██░░░░░██░██░░░░░██░██░░░░░█░░░░░ */
+/* ░░░░░░░█████░░░░███████░░████████░░░░░ */
+/* ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ */
+/* ++++++++++++++++++++++++++++++++++++++ */
+
+/* ++++++++++++ FOR TRANSFER CURVE ++++++++++++ */
+// ---------- ABSID, SQRTID, GATE Leak Plot.
+// ----------------- Forward, Backward Loop.
+
+/*
+// ++++++++++++  R   E   A   D   M   E  ++++++++++++ //
+ * Required Data from KIETHLEY :
+   - Gate Voltage
+   - Drain Current
+   - Gate Current
+   - Drain Voltage
+   - SQRTID
+   - ABSID
+   - Time
+*/
+
+
+//0. Sweep configuration
+int numPoints, isDual=1, nData=0;
+double stepVGS, iniVGS, finVGS;
+
+numPoints = Sheet3!col(3)[23];
+stepVGS = Sheet3!col(3)[22];
+iniVGS = Sheet3!col(3)[20];
+finVGS = Sheet3!col(3)[21];
+if (Sheet3!col(3)[30]$ == "Enabled") { isDual = 2; }
+
+for (n=1;n<256;n++) {
+  if (col($(n))[1]$ == "") {
+    nData = n-1;
+    break;
+  }
+}
+
+
+// 1. Configure each columns for data plot: VGS, IDS, IGS, SQRTID
+int isABSID = 0;
+int isABSGI = 0;
+int isSQRTID = 0;  // For someone who didn't inclue SQRTID data... will be updated if needed
+
+for (i = 1; i <= nData; i++) {
+  string DName$ = col($(i))[1]$;
+  if (DName == "GateV") {
+    wks.col$(i).type = 4;
+    col($(i))[L]$ = "V\-(G)";
+    col($(i))[U]$ = "V";
+  } else if (DName == "ABSID") {
+      wks.col$(i).type = 1;
+      col($(i))[L]$ = "I\-(D)";
+      col($(i))[U]$ = "A";
+      col($(i))[C]$ = "Sample#";
+      isABSID++;
+  } else if (DName == "ABSGI") {
+      wks.col$(i).type = 1;
+      col($(i))[L]$ = "I\-(G)";
+      col($(i))[U]$ = "A";
+      isABSGI++;
+  } else if (DName == "SQRTID") {
+      wks.col$(i).type = 1;
+      col($(i))[L]$ = "I\-(DS)\+(1/2)";
+      col($(i))[U]$ = "A\+(1/2)";
+      isSQRTID++;
+  } else if (DName == "DrainV") {
+      wks.col$(i).type = 2;
+      col($(i))[L]$ = "V\-(DS)";
+      col($(i))[U]$ = "V";
+      col($(i))[C]$ = $(col($(i))[2]);
+  } else {
+      col($(i))[L]$ = col($(i))[1]$;
+      wks.col$(i).type = 2;
+      col($(i))[U]$ = "";
+      col($(i))[C]$ = "";
+  }
+} 
+
+// 2. Make sure every data is positive -> Set to absolute values that are not
+if (isABSGI != 1) {
+  range GTemp = col("GateI");
+  colABSGI = GTemp.index;
+  GTemp.type = 1;
+  for (i=2;i<=wks.maxRows;i++) { GTemp[$(i)] = abs(GTemp[$(i)]) }
+  col("GateI")[L]$ = "I\-(G)";
+  col("I\-(G)")[U]$ = "A";
+  isABSGI++;
+}
+if (isABSID != 1) {
+  range DTemp = col("DrainI");
+  colABSGI = DTemp.index;
+  DTemp.type = 1;
+  for (i=2;i<=wks.maxRows;i++) { DTemp[$(i)] = -DTemp[$(i)] }
+  col("DrainI")[L]$ = "I\-(D)";
+  col("I\-(D)")[U]$ = "A";
+  isABSID++;
+}
+
+// 3. Rearrange the order of columns: 1.VGS 2.IDS 3.IGS 4.SQRTID
+range VGS = col("V\-(G)");
+VGS.index = 1;
+range IDS = col("I\-(D)");
+IDS.index = 2;
+range IGS = col("I\-(G)");
+IGS.index = 3;
+range SQID = col("I\-(DS)\+(1/2)");
+SQID.index = 4;
+range VDS = col("V\-(DS)");
+VDS.index = 5;
+
+// ---------------------------------------------------------------- //
+// ---------------------------------------------------------------- //
+/* --- Now ready for all data manipulation ... Data reorganized --- */
+// ---------------------------------------------------------------- //
+// ---------------------------------------------------------------- //
+
+wks.ncols = nData + 1 + 4 + 1 + 5; // Default [nData] Mobility [4] Hysteresis [5]
+
+
+// 4. Mobility estimation with three different models
+int Vd = %(col(6)[C]$);
+
+range VGS_mblty = col($(nData)+2);
+VGS_mblty.label$ = "VGS for mobility";
+VGS_mblty.script$ = 'int numPoints = Sheet3!col(3)[23]; int isDual = 1; if (Sheet3!col(3)[30]$ == "Enabled") { isDual = 2; }';
+VGS_mblty.formula$ = "A[2:numPoints/isDual+1]";
+
+range SQID_mblty = col($(nData)+3);
+SQID_mblty.label$ = "SQRTID for mobility";
+VGS_mblty.script$ = 'int numPoints = Sheet3!col(3)[23]; int isDual = 1; if (Sheet3!col(3)[30]$ == "Enabled") { isDual = 2; }';
+VGS_mblty.formula$ = "B[2:numPoints/isDual+1]";
+
+range SQID_Slope_mblty = col($(nData)+4);
+SQID_Slope_mblty.label$ = "SQRTID Slope for mobility";
+// for (i=2;i<=numPoints;i++) { col("SQRTID Slope for mobility")[$(i)] = (col("SQRTID for mobility")[$(i)]+col("SQRTID for mobility")[$(i)+1])/2; }
+SQID_Slope_mblty.formula$ = '(col("SQRTID for mobility")[$(i)]+col("SQRTID for mobility")[$(i)+1])/2;';
+
+range SQID_Slope_Avg_mblty = col($(nData)+5);
+SQID_Slope_Avg_mblty.label$ = "Average SQRTID Slope for mobility";
+// for (i=3;i<=numPoints-1;i++) { col("Average SQRTID Slope for mobility")[$(i)] = abs(mean(col("SQRTID Slope for mobility")[$(i)-1]:[$(i)+1]); }
+SQID_Slope_Avg_mblty.formula$ = 'abs(mean(col("SQRTID Slope for mobility")[$(i)-1]:[$(i)+1])';
+
+
+double maxAvgSlope = max(col("Average SQRTID Slope for mobility"));
+double IDSofMaxSlope = col(2)[$(maxIndex(col("Average SQRTID Slope for mobility"))];
+double VGSofMaxSlope = col(1)[$(maxIndex(col("Average SQRTID Slope for mobility"))];
+
+// 4.1. 0'th Vth assumption
+double iSlopZeroth = 
+
+
+
+// 5. Hysteresis loop analysis
+int VGS_MAX = (wks.maxRows-1)/2+1;
+range F_ID = IDS[2 : VGS_MAX];
+range B_ID = IDS[VGS_MAX+1 : wks.maxRows];
+
+// Dataset F_ID; Dataset B_ID; F_ID = Fid; B_ID = Bid;
+// int Interval = abs(ID.row$(2) - ID.row$(3));
+
+
+integ F_ID -b 1 -e VGS_MAX;
+double fScan_Area = abs(integ.area);
+
+integ B_ID F_ID -b VGS_MAX+1 -e wks.maxRows;
+double bScan_Area = abs(integ.area);
+
+double Hysteric_Window = ((fScan_Area - bScan_Area)/fScan_Area)*100;
+type -a "==Backward Integration result==\n\tFrom: $(integ.x1)\n\tTo: $(integ.x2)\n\tArea: [F] $(fScan_Area) [B] $(bScan_Area)\n\tHysteric Window: $(Hysteric_Window)";

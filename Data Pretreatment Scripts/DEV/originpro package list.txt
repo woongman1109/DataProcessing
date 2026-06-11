@@ -1,0 +1,11 @@
+['APP', 'Axis', 'BaseLayer', 'BaseObject', 'BasePage', 'Connector', 'CopyPageRatio', 'DBook', 'DSheet', 'ET', 'Folder', 'GLayer', 
+'GPage', 'IPage', 'Label', 'LinearFit', 'List', 'MBook', 'MSheet', 'NLFit', 'Notes', 'OriginExt', 'PATHSEP', 'Plot', 'Union', 
+'WBook', 'WSheet', 
+'__all__', '__builtins__', '__cached__', '__doc__', '__file__', '__loader__', '__name__', '__package__', '__path__', '__spec__', 
+'abc', 'active_folder', 'active_obj', 'analysis', 'atexit', 'attach', 'attrib_key', 'base', 'basename', 'color_col', 'config', 'contextmanager', 
+'date', 'dc', 'detach', 'dirname', 'dt', 'evaluate_FDF', 'exit', 'file_dialog', 'find_book', 'find_graph', 'find_image', 'find_notes', 'find_sheet', 'from_series', 
+'get_file_ext', 'get_file_parts', 'get_lt_str', 'get_page', 'get_show', 'glob', 'graph', 'graph_list', 'image', 'imp', 'isfile', 'join', 
+'last_backslash', 'load_book', 'lt_delete_tree', 'lt_dict_to_tree', 'lt_empty_tree', 'lt_exec', 'lt_float', 'lt_int', 'lt_tree_to_dict', 
+'make_DataRange', 'matrix', 'messagebox', 'modi_col', 'modules', 'new', 'new_book', 'new_graph', 'new_image', 'new_notes', 'new_sheet', 'notes', 'np', 'npdtype_to_orgdtype', 
+'ocolor', 'oext', 'olab_download', 'open', 'org_ver', 'orgdtype_to_npdtype', 'origin_class', 'os', 'pages', 'path', 'pd', 'pe', 'po', 'project', 'root_folder', 
+'save', 'set_lt_str', 'set_lt_var', 'set_show', 'sysvar', 'tdlt', 'time', 'to_rgb', 'utils', 'wait', 'warnings', 'worksheet']

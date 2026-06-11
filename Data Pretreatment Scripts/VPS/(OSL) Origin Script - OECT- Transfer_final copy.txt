@@ -1,0 +1,119 @@
+/* Organic Semiconductor Lab, SAINT, SKKU */
+/* Source code copyright to Taewoong Yoon */
+/* +++++ Email: TWYoon.rs@gmail.com +++++ */
+/* ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ */
+/* ░░░░░░░█████░░░░███████░░██░░░░░░░░░░░ */
+/* ░░░░░██░░░░░██░██░░░░░██░██░░░░░░░░░░░ */
+/* ░░░░░█░░░░░░░█░███░░░░░░░██░░░░░░░░░░░ */
+/* ░░░░░█░░░░░░░█░░░█████░░░██░░░░░░░░░░░ */
+/* ░░░░░█░░░░░░░█░░░░░░░███░██░░░░░░░░░░░ */
+/* ░░░░░██░░░░░██░██░░░░░██░██░░░░░█░░░░░ */
+/* ░░░░░░░█████░░░░███████░░████████░░░░░ */
+/* ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ */
+/* ++++++++++++++++++++++++++++++++++++++ */
+
+/* ++++++++++++ FOR OECT TRANSFER CURVE ++++++++++++ */
+// ---------- V_G, I_D, I_S, I_G.
+
+/*
+// ++++++++++++  R   E   A   D   M   E  ++++++++++++ //
+ * Required Data from KIETHLEY :
+   - Gate Voltage
+   - Drain Current
+   - Source Current
+   - Gate Current
+*/
+
+
+//A. Sweep configuration
+int numPoints, isDual=1, nData=0;
+int isABSID=0, IDCheck=0;
+double stepVGS, iniVGS, finVGS;
+
+numPoints = Sheet3!col(3)[23];
+stepVGS = Sheet3!col(3)[22];
+iniVGS = Sheet3!col(3)[20];
+finVGS = Sheet3!col(3)[21];
+if (Sheet3!col(3)[30]$ == "Enabled") { isDual = 2; }
+nData = wks.ncols;
+
+//B. Check if absolute data included
+for (i = 1; i <= nData; i++) {
+  if (col($(i))[1]$ == "ABSID") {
+    isABSID = 1;
+    //type -a There is ABSID. Col#: $(i) $(isABSID);
+  }
+}
+string DName$ = "";
+// 1. Configure each columns for data plot: VG, ID, IG, SQRTID
+for (i = 1; i <= nData; i++) {
+  DName$ = col($(i))[1]$;
+  if (DName == "GateV") {
+    wks.col$(i).type = 4;
+    col($(i))[L]$ = "\i(\b(V))\-(G)";
+    col($(i))[U]$ = "V";
+  } else if (DName == "SQRTID") {
+      wks.col$(i).type = 1;
+      col($(i))[L]$ = "\i(\b(I))\-(D)\+(1/2)";
+      col($(i))[U]$ = "A\+(1/2)";
+  } else if (DName == "GateI") {
+      wks.col$(i).type = 1;
+      col($(i))[L]$ = "\i(\b(I))\-(G)";
+      col($(i))[U]$ = "A";
+  } else {
+      col($(i))[L]$ = col($(i))[1]$;
+      wks.col$(i).type = 2;
+      col($(i))[U]$ = "";
+      col($(i))[C]$ = "";
+  }
+  // ID column
+  if (isABSID > 0) {
+    if (DName == "ABSID") {
+      wks.col$(i).type = 1;
+      col($(i))[L]$ = "\i(\b(I))\-(D)";
+      col($(i))[U]$ = "A";
+      col($(i))[C]$ = "Sample#";
+      IDCheck = 1;
+      // type -a 123123 $(IDCheck) $(isABSID);
+    }
+  }
+  else if (isABSID == 0) {
+    if (DName == "DrainI") {
+      // type -a 765765 $(IDCheck) $(isABSID) $(col($(i))[L]);
+      wks.col$(i).type = 1;
+      col($(i))[L]$ = "\i(\b(I))\-(D)";
+      col($(i))[U]$ = "A";
+      col($(i))[C]$ = "Sample#";
+      IDCheck = 1;
+    }      
+  }
+} 
+
+// 3. Rearrange the order of columns: 1.VG 2.ID 3.IS 4.IG
+range VG = col("\i(\b(V))\-(G)");
+VG.index = 1;
+range ID = col("\i(\b(I))\-(D)");
+ID.index = 2;
+range IG = col("\i(\b(I))\-(G)");
+IG.index = 3;
+
+
+// 4. Make sure every data is positive -> Set to absolute values that are notz
+
+for (i=2;i<=wks.maxRows;i++) { col(B)[$(i)] = abs(col(B)[$(i)]) }
+
+for (i=2;i<=wks.maxRows;i++) { col(C)[$(i)] = abs(col(C)[$(i)]) }
+
+
+// 5. Differentiate
+wks.nCols++;
+for (i=nData;i>2;i--) {
+  // type -a $(i);
+  range tmp = Col($(i));
+  tmp.index = i+1;
+}
+differentiate iy:=Col(2) oy:=Col(3);
+wks.col$(3).type = 1;
+col(3)[L]$ = "\i(\b(g))\-(m)";
+col(3)[U]$ = "mS";
+col(3)[C]$ = "derivative of B";

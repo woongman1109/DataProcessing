@@ -1,0 +1,73 @@
+/* Organic Semiconductor Lab, SAINT, SKKU */
+/* Source code copyright to Taewoong Yoon */
+/* +++++ Email: TWYoon.rs@gmail.com +++++ */
+/* ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ */
+/* ░░░░░░░█████░░░░███████░░██░░░░░░░░░░░ */
+/* ░░░░░██░░░░░██░██░░░░░██░██░░░░░░░░░░░ */
+/* ░░░░░█░░░░░░░█░███░░░░░░░██░░░░░░░░░░░ */
+/* ░░░░░█░░░░░░░█░░░█████░░░██░░░░░░░░░░░ */
+/* ░░░░░█░░░░░░░█░░░░░░░███░██░░░░░░░░░░░ */
+/* ░░░░░██░░░░░██░██░░░░░██░██░░░░░█░░░░░ */
+/* ░░░░░░░█████░░░░███████░░████████░░░░░ */
+/* ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ */
+/* ++++++++++++++++++++++++++++++++++++++ */
+
+/* ++++++++++++++ CODE FOR GIWAXS 3C BEAMLINE DATA ++++++++++++++ */
+// Automatically construct datasheet with each sample name from .xls file
+// Each sheet has 2 columns with X, Y (long name, unit, comments filled automatically)
+// Assigns designated 1D vector to each X column (long name)
+// Assigns designated sample name to each Y column (comments)
+
+/*
+// ++++++++++++  R   E   A   D   M   E  ++++++++++++ //
+ * This code is to format the data in .xlsx file. For Matlab processing, check for the other file.
+
+ * (DATA NAME RULE) You should follow below rules when exporting your variables from raw data (.tif) with Matlab
+   - Each variable should be named with its sample information
+     (Required: Samplename, 1D vector direction)
+   - 1D vector direction notation "MUST BE" qz or qxy
+     Vector name rule: *qxy*, *qz* (case insensitive)
+   - ex: P3HT_qxy, P3HT_qZ_2, P3HT_FeCl3_qxy_1 (left or right of qxy/qz can be any string)
+
+ * (데이터 이름 규칙) Matlab으로 raw data에서 변수를 추출할 때 아래 규칙을 지켜야 합니다.
+   - 각 변수는 샘플 정보로 이름을 붙여야 합니다.
+     (필요 정보: 샘플 이름, 1D 벡터 방향)
+   - 1D 벡터 방향은 "반드시" qxy 또는 qz이어야 합니다.
+     벡터 이름 규칙이 *qxy*, *qz*로 정해져 있습니다.
+   - 예시: P3HT_qxy, P3HT_qz_1, P3HT_FeCl3_qxy_1 (qxy/qz의 좌우로는 어떤 문자열이 와도 관계 없음)
+*/
+
+/*
+// ++++++++++++  Processing Step  ++++++++++++ //
+  1. Open an empty workbook in Origin.
+  2. Select "Worksheet > Worksheet Script ..." and open the script window.
+  3. Check "After Import".
+  4. Copy and Paste this whole text into the script box.
+  5. Press "OK" and exit the window.
+  6. Drag and drop the .xlsx file into the workbook.
+  7. (Plotting) Right-click the legend box, and select "Properties". Change every legend setting from %(n) to %(n, @LC).
+  8. (Plotting) Double-click the Axis title (X, Y both) and change the format by adding ", @LG". [ex: %(?X, @LG)]
+  * More @Option for legend text: https://www.originlab.com/doc/en/LabTalk/ref/Legend-Substitution-Notation
+*/
+
+
+doc -e LW {
+  sheetName$ = layer.name$;
+  type -a "%(sheetName$)";
+  wks.col1.type = 4;
+  wks.col2.type = 1;
+  col(A)[U]$ = "Å\+(-1)";
+  col(A)[C]$ = "";
+  col(B)[L]$ = "Intensity";
+  col(B)[U]$ = "a.u.";
+  col(B)[C]$ = %(sheetName$);
+  wks.col1.format = 1;
+  wks.col2.format = 1;
+  if (sheetName.Match("*qxy*")) {
+    col(A)[L]$ = "q\-(xy)";
+  } else if (sheetName.Match("*qz*")) {
+    col(A)[L]$ = "q\-(z)";
+  }
+  int dataSize = wks.nRows;
+  }
+
