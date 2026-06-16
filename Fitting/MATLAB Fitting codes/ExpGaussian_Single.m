@@ -71,28 +71,20 @@ for ii = 1:Na
     y = Is(:,ii);
     y_log = log(y);
     
-    % --- 마스킹(Masking) 조건 설정 (알고리즘 전면 수정) ---
-    % 1. 데이터가 0인 점 
-    mask1 = (y == 0);
-    
-    % 2. 0인 점들을 임시로 NaN 처리
-    y_temp = y;
-    y_temp(mask1) = NaN;
-    
-    % [핵심] 0으로 뻥 뚫린 구간을 양옆 정상 데이터 기준으로 직선을 그어 메꿈 (가상의 다리)
-    % 이렇게 하면 중간에 툭 튀는 점도 가상 기준선(약 400 근처)과 비교당하게 됩니다.
-    y_bridge = fillmissing(y_temp, 'linear'); 
-    
-    % 3. 메꿔진 가상의 궤도를 바탕으로 이동 중간값 계산 (omitnan 필요 없음)
-    local_ref = movmedian(y_bridge, window_size); 
-    
-    % 4. 실제 데이터(y)가 정상 궤도(local_ref) 대비 90% 이하면 제외
-    mask2 = (y <= 0.9 * local_ref);
+    % --- 마스킹(Masking) 조건 설정 ---
+    mask1 = (y == 0);                               % 1. 데이터가 0인 점 
+    y_temp = y;                                     % 2. ----------------
+    y_temp(mask1) = NaN;                            % 2-1. 0인 점들을 임시로 NaN 처리
+    y_bridge = fillmissing(y_temp, 'linear');       % 2-2. 0으로 뻥 뚫린 구간을 양옆 정상 데이터 기준으로 직선을 그어 메꿈 (가상의 다리)
+                                                    % 이렇게 하면 중간에 툭 튀는 점도 가상 기준선(약 400 근처)과 비교당하게 됩니다.
+    local_ref = movmedian(y_bridge, window_size);   % 3. 메꿔진 가상의 궤도를 바탕으로 이동 중간값 계산 (omitnan 필요 없음)   
+    mask2 = (y <= 0.9 * local_ref);                 % 4. 실제 데이터(y)가 정상 궤도(local_ref) 대비 90% 이하면 제외
     
     % 최종적으로 피팅에서 제외할 인덱스
     exclude_idx = mask1 | mask2 | (y <= 0) | ~isfinite(y_log);
     % --------------------------------
     
+    initialparam = [p1, p2, p3, p4, p5, p6, p7, p8, p9];
     lb = [ p1*0.1, p2*0.1, p3*0.1, p4*0.001, p5 - 0.1, p6 - 0.06, p7*0.001, p8 - 0.1, p9 - 0.1 ];
     ub = [ p1*100, p2*100, p3*1.1, p4*100, p5 + 0.1, p6 + 0.2, p7*1, p8 + 0.1, p9 + 0.1  ];
     
