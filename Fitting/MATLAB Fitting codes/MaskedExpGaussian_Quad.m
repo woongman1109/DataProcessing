@@ -40,20 +40,19 @@ targ = 378;
 x = qs;
 y = Is(:,targ);
 
-p1 = 1.3e1; % exp Scale
-p2 = 3.8; % slope
-p3 = 140; % linear background
+% [pB]      expScale    slope   linearBG
+pB =    [   1.3e1,      3.8,    140];
 
-p4 = 2E2; % Gaussian Amplitude
-p5 = 0.55; % Mean
-p6 = 0.15; % FWHM
+% [pG]      Amplitude    Mean    FWHM
+pG1 = [     2E2,         0.55,   0.15   ];
+pG2 = [     0.5E2,       0.75,   0.08   ];
+pG3 = [     0.5E2,       0.75,   0.08   ];
+pG4 = [     0.5E2,       0.75,   0.08   ];
 
-p7 = 0.5E2; % Gaussian Amplitude
-p8 = 0.75; % Mean
-p9 = 0.08; % FWHM
 
-exb = expBKG(x,p1,p2,p3);
-gb = Gaussian(x,p4,p5,p6,p7,p8,p9);
+exb = expBKG(x,pB(1),pB(2),pB(3));
+gb = Gaussian(x,pG1(1),pG1(2),pG1(3),pG2(1),pG2(2),pG(3));
+gb = Gaussian(x, pB, pG1, pG2);
 
 G = exb + gb;
 
@@ -72,7 +71,7 @@ window_size = 2*n + 1;
 % ------- 초기 Gaussian 마스킹 ------- %
 % ----- Gaussian의 exp 흡수 방지 ------%
 FWHM_MASK_FACTOR = 1.2;   % 피크 마스킹 범위 : ±FWHM_MASK_FACTOR × FWHM
-BKG_MARGIN       = 0.001;  % Step2 배경 파라미터 허용 범위 (±15%)
+BKG_MARGIN       = 0.001;  % StepB(2) 배경 파라미터 허용 범위 (±15%)
 ForcedUnmask     = 0.02;  % 데이터 양끝 각 비율만큼은 마스킹 무시하고 배경 피팅에 강제 포함
 
 for ii = 1006:1006
@@ -97,11 +96,11 @@ for ii = 1006:1006
     % =========================================================
 
     % 현재 프레임의 초기 피크 위치·폭을 이용해 피크 구역 마스킹
-    %   1번 피크: 중심 p5, FWHM p6
-    %   2번 피크: 중심 p8, FWHM p9
+    %   1번 피크: 중심 pG1(2), FWHM pG1(3)
+    %   2번 피크: 중심 pG2(2), FWHM pG(3)
     if ii == 1
-        peak_centers = [p5, p8];
-        peak_fwhms   = [p6, p9];
+        peak_centers = [pG1(2), pG2(2)];
+        peak_fwhms   = [pG1(3), pG(3)];
     else
         peak_centers = [parameter(ii-1, 5), parameter(ii-1, 8)];
         peak_fwhms   = [parameter(ii-1, 6), parameter(ii-1, 9)];
@@ -136,13 +135,13 @@ for ii = 1006:1006
     y_bkg_log = log(y_bkg);
 
     % 3-파라미터 배경 전용 fittype
-    EqnBkg = fittype(@(p1,p2,p3,x) log(expBKG(x,p1,p2,p3)), ...
+    EqnBkg = fittype(@(pB(1),pB(2),pB(3),x) log(expBKG(x,pB(1),pB(2),pB(3))), ...
         'independent', 'x', ...
-        'coefficients', {'p1','p2','p3'});
+        'coefficients', {'pB(1)','pB(2)','pB(3)'});
 
-    lb_bkg = [p1*0.001, p2*0.001, p3*0.1];
-    ub_bkg = [p1*1000, p2*1000, p3*1.1];
-    ig_bkg = [p1,     p2,     p3    ];
+    lb_bkg = [pB(1)*0.001, pB(2)*0.001, pB(3)*0.1];
+    ub_bkg = [pB(1)*1000, pB(2)*1000, pB(3)*1.1];
+    ig_bkg = [pB(1),     pB(2),     pB(3)    ];
 
     % 로그 도메인 뒤쪽 꼬리 편향 보정: 큰 값(앞쪽)에 가중치 부여
     w_bkg = power(y_bkg / max(y_bkg),2);
@@ -154,10 +153,10 @@ for ii = 1006:1006
             'Robust', 'LAR', ...
             'Weights', w_bkg);
         bp = coeffvalues(FitBkg);
-        p1f = bp(1);  p2f = bp(2);  p3f = bp(3);
+        pB(1)f = bp(1);  pB(2)f = bp(2);  pB(3)f = bp(3);
     catch ME_bkg
-        warning('Frame %d Step1 failed (%s). Using initial params.', ii, ME_bkg.message);
-        p1f = p1;  p2f = p2;  p3f = p3;
+        warning('Frame %d StepB(1) failed (%s). Using initial params.', ii, ME_bkg.message);
+        pB(1)f = pB(1);  pB(2)f = pB(2);  pB(3)f = pB(3);
     end
 
     % =========================================================
@@ -166,7 +165,7 @@ for ii = 1006:1006
     m = BKG_MARGIN;
 
     % 음수 파라미터(b처럼 지수에 음수가 올 수 있음)를 고려한 bounds 계산
-    bkg_vals  = [p1f, p2f, p3f];
+    bkg_vals  = [pB(1)f, pB(2)f, pB(3)f];
     lb2_bkg   = zeros(1,3);
     ub2_bkg   = zeros(1,3);
     for bi = 1:3
@@ -184,14 +183,14 @@ for ii = 1006:1006
     end
 
 
-    initialparam2 = [p1f, p2f, p3f, p4, p5, p6, p7, p8, p9];
-    lb2 = [lb2_bkg, p4*0.001, p5 - 0.2, p6 - 0.2, p7*0.001, p8 - 0.05, p9 - 0.03 ];
-    ub2 = [ub2_bkg, p4*1000, p5 + 0.2, p6 + 0.2, p7*100, p8 + 0.02, p9 + 0.1  ];
+    initialparam2 = [pB(1)f, pB(2)f, pB(3)f, pG1(1), pG1(2), pG1(3), pG2(1), pG2(2), pG(3)];
+    lb2 = [lb2_bkg, pG1(1)*0.001, pG1(2) - 0.2, pG1(3) - 0.2, pG2(1)*0.001, pG2(2) - 0.05, pG(3) - 0.03 ];
+    ub2 = [ub2_bkg, pG1(1)*1000, pG1(2) + 0.2, pG1(3) + 0.2, pG2(1)*100, pG2(2) + 0.02, pG(3) + 0.1  ];
 
-    Eqn = fittype(@(p1,p2,p3,p4,p5,p6,p7,p8,p9,x) ...
-        log(GFt1exB(x,p1,p2,p3,p4,p5,p6,p7,p8,p9)), ...
+    Eqn = fittype(@(pB(1),pB(2),pB(3),pG1(1),pG1(2),pG1(3),pG2(1),pG2(2),pG(3),x) ...
+        log(GFt1exB(x,pB(1),pB(2),pB(3),pG1(1),pG1(2),pG1(3),pG2(1),pG2(2),pG(3))), ...
         'independent', 'x', ...
-        'coefficients', {'p1','p2','p3','p4','p5','p6','p7','p8','p9'});
+        'coefficients', {'pB(1)','pB(2)','pB(3)','pG1(1)','pG1(2)','pG1(3)','pG2(1)','pG2(2)','pG(3)'});
 
     % 가우시안 피크 영역 가중치 (기존 그대로)
     weights = ones(size(x));
@@ -207,12 +206,12 @@ for ii = 1006:1006
             'Weights', weights);
 
     catch ME_full
-        % Step2 실패 시 배경 tight bounds 없이 폴백
-        warning('Frame %d Step2 failed (%s). Falling back to single-step.', ii, ME_full.message);
+        % StepB(2) 실패 시 배경 tight bounds 없이 폴백
+        warning('Frame %d StepB(2) failed (%s). Falling back to single-step.', ii, ME_full.message);
         lb_fb = [lb_bkg, lb2(4:9)];
         ub_fb = [ub_bkg, ub2(4:9)];
         IS = fit(x, y_log, Eqn, ...
-            'Start', [p1,p2,p3,p4,p5,p6,p7,p8,p9], ...
+            'Start', [pB(1),pB(2),pB(3),pG1(1),pG1(2),pG1(3),pG2(1),pG2(2),pG(3)], ...
             'Lower', lb_fb, 'Upper', ub_fb, ...
             'Robust', 'LAR', ...
             'Exclude', exclude_idx, ...
@@ -246,8 +245,8 @@ for ii = 1006:1006
     plot(x(~exclude_idx), y(~exclude_idx), 'ok', 'MarkerFaceColor', 'k');
     plot(x(exclude_idx),  y(exclude_idx),  'xr', 'MarkerSize', 8, 'LineWidth', 1.5);
     plot(x(bkg_fit_mask), y(bkg_fit_mask), 'b.', 'MarkerSize', 20);  % 배경 피팅에 실제 사용된 점
-    exb_step1 = expBKG(x, p1f, p2f, p3f);
-    plot(x, exb_step1, '--', 'Color', [1 0.5 0], 'LineWidth', 1.2);  % Step1 배경
+    exb_stepB(1) = expBKG(x, pB(1)f, pB(2)f, pB(3)f);
+    plot(x, exb_stepB(1), '--', 'Color', [1 0.5 0], 'LineWidth', 1.2);  % StepB(1) 배경
     plot(x, exb);
     plot(x, gb);
     plot(x, G); hold off
