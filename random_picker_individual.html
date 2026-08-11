@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>슬롯 추첨기</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+<style>
+  :root{
+    --bg:#0a0d10;
+    --bg2:#0e1217;
+    --panel:#141a20;
+    --panel2:#19212a;
+    --line:#242e38;
+    --line2:#2e3a46;
+    --txt:#e9eef3;
+    --muted:#7d8893;
+    --muted2:#566069;
+    --mint:#00ffa3;
+    --mint-dim:#0fcf8a;
+    --mint-deep:#063;
+    --danger:#ff5d6c;
+    --amber:#ffc24b;
+    --row-h:76px;
+    --sidebar-w:286px;
+    --font:'Pretendard',-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    font-family:var(--font);
+    background:var(--bg);
+    color:var(--txt);
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:rgba(0,255,163,.25)}
+  button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+  input,textarea{font-family:inherit}
+  input:focus,textarea:focus{outline:none}
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:#283340;border-radius:10px}
+  ::-webkit-scrollbar-thumb:hover{background:#33414f}
+  ::-webkit-scrollbar-track{background:transparent}
+
+  .app{display:flex;height:100vh;width:100vw}
+
+  /* ===================== SIDEBAR ===================== */
+  .sidebar{
+    width:var(--sidebar-w);flex:0 0 var(--sidebar-w);
+    background:linear-gradient(180deg,#0f151b,#0b0f14);
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;
+    padding:18px 16px 16px;
+  }
+  .brand{display:flex;align-items:center;gap:9px;margin-bottom:4px}
+  .brand .dot{
+    width:11px;height:11px;border-radius:50%;
+    background:var(--mint);
+    box-shadow:0 0 12px var(--mint),0 0 3px var(--mint);
+    animation:pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .brand h1{font-size:16px;font-weight:800;letter-spacing:-.02em}
+  .brand h1 b{color:var(--mint);font-weight:800}
+  .side-sub{font-size:11.5px;color:var(--muted2);margin:3px 0 16px 20px;letter-spacing:.01em}
+
+  .side-label{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px;
+    letter-spacing:.02em;
+  }
+  .side-label .cnt{color:var(--mint);font-weight:800;font-variant-numeric:tabular-nums}
+  .side-label .cnt.zero{color:var(--muted2)}
+
+  .names-wrap{flex:1;position:relative;min-height:0;display:flex}
+  #names{
+    flex:1;width:100%;resize:none;
+    background:var(--bg);border:1px solid var(--line);border-radius:12px;
+    color:var(--txt);font-size:14px;line-height:1.85;padding:12px 13px;
+    letter-spacing:-.01em;transition:border-color .15s;
+  }
+  #names::placeholder{color:#3f4954;line-height:1.85}
+  #names:focus{border-color:var(--line2)}
+  #names:disabled{
+    color:var(--muted);background:#0c1116;border-style:dashed;
+    cursor:not-allowed;opacity:.85;
+  }
+  .locked-badge{
+    position:absolute;top:10px;right:10px;
+    font-size:10.5px;font-weight:700;color:var(--mint);
+    background:rgba(0,255,163,.08);border:1px solid rgba(0,255,163,.25);
+    padding:3px 8px;border-radius:20px;display:none;align-items:center;gap:5px;
+  }
+  .locked .locked-badge{display:inline-flex}
+
+  .side-actions{display:flex;gap:9px;margin-top:13px}
+  .btn{
+    flex:1;height:44px;border-radius:11px;font-size:14px;font-weight:800;
+    letter-spacing:-.01em;transition:transform .08s,filter .15s,background .15s,opacity .15s;
+    display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  }
+  .btn:active{transform:translateY(1px)}
+  .btn-primary{
+    background:var(--mint);color:#04130d;
+    box-shadow:0 0 0 1px rgba(0,255,163,.4),0 8px 22px -10px rgba(0,255,163,.7);
+  }
+  .btn-primary:hover{filter:brightness(1.07)}
+  .btn-primary:disabled{
+    background:#1c252e;color:#46525d;box-shadow:none;cursor:not-allowed;
+  }
+  .btn-ghost{
+    background:transparent;color:var(--muted);
+    border:1px solid var(--line2);
+  }
+  .btn-ghost:hover{color:var(--txt);border-color:#3c4a58;background:#11171d}
+
+  .side-foot{margin-top:13px;font-size:11px;color:var(--muted2);line-height:1.6;text-align:center}
+
+  /* ===================== MAIN ===================== */
+  .main{flex:1;min-width:0;display:flex;flex-direction:column;background:
+    radial-gradient(1200px 600px at 70% -10%,rgba(0,255,163,.045),transparent 60%),
+    var(--bg);
+    position:relative;
+  }
+  .main::before{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background-image:linear-gradient(rgba(255,255,255,.012) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,.012) 1px,transparent 1px);
+    background-size:46px 46px;mask-image:radial-gradient(900px 500px at 60% 0%,#000,transparent 75%);
+  }
+  .topbar{
+    flex:0 0 auto;display:flex;align-items:center;gap:16px;
+    padding:16px 26px;border-bottom:1px solid var(--line);
+    background:rgba(10,13,16,.6);backdrop-filter:blur(6px);z-index:5;
+  }
+  .topbar h2{font-size:15px;font-weight:800;letter-spacing:-.02em}
+  .topbar h2 span{color:var(--muted);font-weight:600;margin-left:8px;font-size:13px}
+  .status-pills{margin-left:auto;display:flex;gap:10px;align-items:center}
+  .pill{
+    font-size:12px;font-weight:700;padding:7px 13px;border-radius:30px;
+    background:var(--panel);border:1px solid var(--line);color:var(--muted);
+    font-variant-numeric:tabular-nums;display:inline-flex;gap:6px;align-items:center;
+  }
+  .pill b{color:var(--txt);font-weight:800}
+  .pill.live{border-color:rgba(0,255,163,.3);color:var(--mint)}
+  .pill.live b{color:var(--mint)}
+  .pill.done{background:rgba(0,255,163,.12);border-color:rgba(0,255,163,.4);color:var(--mint)}
+  .sound-toggle{
+    width:40px;height:40px;border-radius:11px;border:1px solid var(--line);
+    background:var(--panel);color:var(--muted);font-size:17px;flex:0 0 auto;
+    display:inline-flex;align-items:center;justify-content:center;
+  }
+  .sound-toggle:hover{color:var(--txt);border-color:var(--line2)}
+  .sound-toggle.on{color:var(--mint);border-color:rgba(0,255,163,.35)}
+
+  .stage{flex:1;overflow-y:auto;padding:26px;position:relative;z-index:1}
+
+  /* -------- Phase: empty placeholder -------- */
+  .placeholder{
+    height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;color:var(--muted2);gap:14px;
+  }
+  .placeholder .ic{
+    width:72px;height:72px;border-radius:20px;border:1.5px dashed var(--line2);
+    display:flex;align-items:center;justify-content:center;font-size:30px;opacity:.6;
+  }
+  .placeholder h3{font-size:17px;font-weight:800;color:var(--muted)}
+  .placeholder p{font-size:13.5px;line-height:1.7;max-width:330px}
+
+  /* -------- Phase: config -------- */
+  .config{max-width:760px;margin:0 auto}
+  .config-head{margin-bottom:22px}
+  .config-head .eyebrow{
+    font-size:11px;font-weight:800;color:var(--mint);letter-spacing:.14em;text-transform:uppercase;
+  }
+  .config-head h3{font-size:24px;font-weight:800;letter-spacing:-.03em;margin-top:6px}
+  .config-head p{font-size:13.5px;color:var(--muted);margin-top:8px;line-height:1.6}
+
+  .field{
+    background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:18px 20px;margin-bottom:16px;
+  }
+  .field-top{display:flex;align-items:center;justify-content:space-between;gap:14px}
+  .field-top .lab{font-size:14px;font-weight:800}
+  .field-top .lab small{display:block;font-weight:500;color:var(--muted);font-size:11.5px;margin-top:3px}
+  .stepper{display:flex;align-items:center;gap:0;background:var(--bg);border:1px solid var(--line2);border-radius:11px;overflow:hidden}
+  .stepper button{
+    width:42px;height:42px;font-size:20px;font-weight:700;color:var(--muted);
+  }
+  .stepper button:hover{color:var(--mint);background:#11171d}
+  .stepper button:active{background:#0c1116}
+  .stepper input{
+    width:54px;height:42px;text-align:center;background:transparent;border:none;
+    color:var(--txt);font-size:18px;font-weight:800;font-variant-numeric:tabular-nums;
+    border-left:1px solid var(--line);border-right:1px solid var(--line);
+  }
+  .stepper input::-webkit-outer-spin-button,.stepper input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+
+  .slot-rows{margin-top:18px;display:flex;flex-direction:column;gap:11px}
+  .slot-row{
+    display:flex;align-items:center;gap:12px;
+    background:var(--bg);border:1px solid var(--line);border-radius:11px;padding:10px 12px;
+  }
+  .slot-row .badge{
+    width:30px;height:30px;flex:0 0 30px;border-radius:9px;font-size:13px;font-weight:800;
+    background:var(--panel2);color:var(--mint);display:flex;align-items:center;justify-content:center;
+    border:1px solid var(--line2);
+  }
+  .slot-row .nm{
+    flex:1;min-width:0;height:38px;background:transparent;border:none;color:var(--txt);
+    font-size:14px;font-weight:600;padding:0 4px;
+  }
+  .slot-row .nm::placeholder{color:var(--muted2)}
+  .slot-row .cap{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+  .slot-row .cap label{font-size:11.5px;color:var(--muted);font-weight:600}
+  .slot-row .cap input{
+    width:64px;height:38px;text-align:center;background:var(--panel2);
+    border:1px solid var(--line2);border-radius:9px;color:var(--txt);
+    font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;
+  }
+  .slot-row .cap input::-webkit-outer-spin-button,.slot-row .cap input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .slot-row .cap input:focus{border-color:var(--mint-dim)}
+
+  .sum-bar{
+    margin-top:20px;display:flex;align-items:center;gap:14px;
+    padding:15px 18px;border-radius:13px;border:1px solid var(--line);
+    background:var(--panel);
+  }
+  .sum-bar .meter{flex:1;height:9px;border-radius:6px;background:#0a0f13;overflow:hidden;position:relative}
+  .sum-bar .meter i{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:6px;background:var(--mint);transition:width .35s cubic-bezier(.2,.7,.2,1)}
+  .sum-bar .meter i.over{background:var(--amber)}
+  .sum-bar .meter i.under{background:var(--danger)}
+  .sum-info{font-size:13px;font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .sum-info .n{font-size:17px;font-weight:800}
+  .sum-msg{font-size:12.5px;font-weight:700;white-space:nowrap}
+  .sum-msg.ok{color:var(--mint)}
+  .sum-msg.over{color:var(--amber)}
+  .sum-msg.under{color:var(--danger)}
+
+  .start-row{margin-top:22px}
+  .btn-start{
+    width:100%;height:54px;border-radius:13px;font-size:16px;font-weight:800;
+    background:var(--mint);color:#04130d;letter-spacing:-.01em;
+    box-shadow:0 0 0 1px rgba(0,255,163,.35),0 14px 30px -14px rgba(0,255,163,.7);
+    transition:transform .08s,filter .15s;
+  }
+  .btn-start:hover{filter:brightness(1.07)}
+  .btn-start:active{transform:translateY(1px)}
+  .btn-start:disabled{background:#1c252e;color:#46525d;box-shadow:none;cursor:not-allowed}
+
+  /* -------- Phase: draw / slots -------- */
+  .slots-grid{
+    display:grid;gap:20px;
+    grid-template-columns:repeat(auto-fill,minmax(290px,1fr));
+    max-width:1280px;margin:0 auto;
+  }
+  .slot{
+    background:linear-gradient(180deg,var(--panel),#10161c);
+    border:1px solid var(--line);border-radius:18px;overflow:hidden;
+    display:flex;flex-direction:column;
+    transition:border-color .2s,box-shadow .2s;
+  }
+  .slot.full{border-color:rgba(0,255,163,.3);box-shadow:0 0 0 1px rgba(0,255,163,.15),0 18px 40px -22px rgba(0,255,163,.45)}
+  .slot-head{
+    display:flex;align-items:center;gap:10px;padding:15px 17px 13px;
+    border-bottom:1px solid var(--line);
+  }
+  .slot-head .sname{font-size:15px;font-weight:800;letter-spacing:-.02em;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .slot-head .scount{
+    font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums;
+    color:var(--muted);background:var(--bg);border:1px solid var(--line2);
+    padding:4px 10px;border-radius:20px;flex:0 0 auto;
+  }
+  .slot.full .scount{color:var(--mint);border-color:rgba(0,255,163,.4);background:rgba(0,255,163,.08)}
+
+  /* the name card / reel */
+  .reel-wrap{padding:16px 17px}
+  .reel{
+    position:relative;height:var(--row-h);border-radius:13px;overflow:hidden;cursor:pointer;
+    background:radial-gradient(120% 140% at 50% 50%,#10161d,#0a0e12);
+    border:1px solid var(--line2);
+    transition:border-color .2s,box-shadow .2s,transform .1s;
+    user-select:none;
+  }
+  .reel:not(.disabled):hover{border-color:#3c4a58}
+  .reel:not(.disabled):active{transform:scale(.992)}
+  .reel.disabled{cursor:default;opacity:.85}
+  /* gradient fade top/bottom while spinning */
+  .reel::before,.reel::after{
+    content:"";position:absolute;left:0;right:0;height:26px;z-index:3;pointer-events:none;opacity:0;transition:opacity .2s;
+  }
+  .reel::before{top:0;background:linear-gradient(180deg,#0a0e12,transparent)}
+  .reel::after{bottom:0;background:linear-gradient(0deg,#0a0e12,transparent)}
+  .reel.spinning::before,.reel.spinning::after{opacity:1}
+
+  .reel-strip{position:absolute;left:0;right:0;top:0;will-change:transform}
+  .reel-row{
+    height:var(--row-h);display:flex;align-items:center;justify-content:center;
+    font-size:21px;font-weight:800;letter-spacing:-.02em;color:#cfd8e0;
+    padding:0 12px;text-align:center;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;
+  }
+  /* center highlight band */
+  .reel-band{
+    position:absolute;inset:0;z-index:2;pointer-events:none;border-radius:13px;
+    box-shadow:inset 0 0 0 1px rgba(0,255,163,0);transition:box-shadow .3s,background .3s;
+  }
+  .reel.landed .reel-band{
+    box-shadow:inset 0 0 0 2px rgba(0,255,163,.9),0 0 26px -2px rgba(0,255,163,.55);
+    background:radial-gradient(120% 130% at 50% 50%,rgba(0,255,163,.1),transparent 70%);
+  }
+  .reel.landed .reel-row{color:#fff;text-shadow:0 0 18px rgba(0,255,163,.55)}
+  .reel-hint{
+    position:absolute;inset:0;z-index:4;display:flex;align-items:center;justify-content:center;gap:8px;
+    font-size:14px;font-weight:800;color:var(--mint);letter-spacing:-.01em;
+    background:radial-gradient(120% 130% at 50% 50%,rgba(0,255,163,.06),transparent 70%);
+    transition:opacity .2s;
+  }
+  .reel-hint .tap{
+    width:22px;height:22px;border-radius:50%;border:1.5px solid var(--mint);
+    display:flex;align-items:center;justify-content:center;font-size:11px;
+    animation:tapb 1.6s ease-in-out infinite;
+  }
+  @keyframes tapb{0%,100%{transform:scale(1);opacity:.7}50%{transform:scale(1.18);opacity:1}}
+  .reel.spinning .reel-hint,.reel.has-result .reel-hint,.reel.disabled .reel-hint{opacity:0;pointer-events:none}
+  .reel-full-tag{
+    position:absolute;inset:0;z-index:4;display:none;align-items:center;justify-content:center;gap:7px;
+    font-size:14px;font-weight:800;color:var(--mint);
+    background:rgba(8,14,18,.55);backdrop-filter:blur(1px);
+  }
+  .reel.disabled .reel-full-tag{display:flex}
+
+  /* members */
+  .members{
+    padding:4px 17px 17px;display:flex;flex-wrap:wrap;gap:8px;align-content:flex-start;
+    min-height:48px;
+  }
+  .members:empty::before{
+    content:"아직 뽑힌 인원이 없어요";color:var(--muted2);font-size:12.5px;font-weight:600;
+    padding:6px 2px;
+  }
+  .chip{
+    font-size:13px;font-weight:700;padding:7px 12px;border-radius:9px;
+    background:var(--panel2);border:1px solid var(--line2);color:var(--txt);
+    display:inline-flex;align-items:center;gap:7px;
+  }
+  .chip .num{
+    font-size:10.5px;font-weight:800;color:var(--mint);font-variant-numeric:tabular-nums;
+    background:rgba(0,255,163,.1);padding:1px 5px;border-radius:5px;
+  }
+  .chip.pop{animation:chipPop .5s cubic-bezier(.2,1.3,.4,1)}
+  @keyframes chipPop{
+    0%{transform:scale(.4) translateY(-8px);opacity:0;background:rgba(0,255,163,.3);border-color:var(--mint)}
+    60%{transform:scale(1.06);opacity:1}
+    100%{transform:scale(1)}
+  }
+
+  /* confetti-ish flash overlay on full completion */
+  .done-flash{
+    position:fixed;inset:0;z-index:50;pointer-events:none;opacity:0;
+    background:radial-gradient(circle at 50% 45%,rgba(0,255,163,.18),transparent 55%);
+  }
+  .done-flash.go{animation:flash 1s ease-out}
+  @keyframes flash{0%{opacity:0}25%{opacity:1}100%{opacity:0}}
+
+  .hidden{display:none!important}
+
+  @media (max-width:720px){
+    body{overflow:auto}
+    .app{flex-direction:column;height:auto;min-height:100vh}
+    .sidebar{width:100%;flex:none}
+    .names-wrap{min-height:160px}
+    .main{min-height:60vh}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation-duration:.001ms!important;transition-duration:.05ms!important}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <span class="dot"></span>
+      <h1>슬롯 <b>추첨기</b></h1>
+    </div>
+    <div class="side-sub">한 줄에 한 명씩 입력</div>
+
+    <div class="side-label">
+      <span>추첨 대상</span>
+      <span class="cnt zero" id="nameCount">0명</span>
+    </div>
+
+    <div class="names-wrap">
+      <textarea id="names" placeholder="홍길동&#10;김철수&#10;이영희&#10;..." spellcheck="false"></textarea>
+      <span class="locked-badge">🔒 확정됨</span>
+    </div>
+
+    <div class="side-actions">
+      <button class="btn btn-primary" id="confirmBtn">확정</button>
+      <button class="btn btn-ghost" id="resetBtn">초기화</button>
+    </div>
+    <div class="side-foot">확정하면 대상이 잠기고<br>오른쪽에서 추첨을 설정할 수 있어요</div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+    <div class="topbar">
+      <h2>추첨 영역 <span id="phaseLabel">대상 확정 대기 중</span></h2>
+      <div class="status-pills" id="statusPills"></div>
+      <button class="sound-toggle on" id="soundBtn" title="효과음 켜기/끄기">🔊</button>
+    </div>
+
+    <div class="stage" id="stage">
+      <!-- placeholder -->
+      <div class="placeholder" id="placeholder">
+        <div class="ic">🎰</div>
+        <h3>먼저 추첨 대상을 확정하세요</h3>
+        <p>왼쪽 사이드바에 이름을 입력하고 <b>확정</b>을 누르면, 슬롯 개수와 크기를 정해 추첨을 시작할 수 있어요.</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="done-flash" id="doneFlash"></div>
+
+<script>
+"use strict";
+
+/* ---------------- state ---------------- */
+const state = {
+  participants: [],   // 확정된 전체 명단
+  confirmed: false,
+  slots: [],          // [{name, capacity, members:[]}]
+  remaining: [],      // 아직 안 뽑힌 명단
+  drawing: false,
+  animating: false,
+  soundOn: true,
+};
+
+const ROW_H = 76;
+
+/* ---------------- elements ---------------- */
+const el = {
+  names: document.getElementById('names'),
+  nameCount: document.getElementById('nameCount'),
+  confirmBtn: document.getElementById('confirmBtn'),
+  resetBtn: document.getElementById('resetBtn'),
+  sidebar: document.getElementById('sidebar'),
+  stage: document.getElementById('stage'),
+  placeholder: document.getElementById('placeholder'),
+  phaseLabel: document.getElementById('phaseLabel'),
+  statusPills: document.getElementById('statusPills'),
+  soundBtn: document.getElementById('soundBtn'),
+  doneFlash: document.getElementById('doneFlash'),
+};
+
+/* ---------------- helpers ---------------- */
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function parseNames(t){return t.split('\n').map(s=>s.trim()).filter(Boolean);}
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+/* ---------------- audio ---------------- */
+let _ac=null;
+function ac(){ if(!_ac){ try{_ac=new (window.AudioContext||window.webkitAudioContext)();}catch(e){} } if(_ac&&_ac.state==='suspended')_ac.resume(); return _ac; }
+function tickAt(ctx,t,vol){
+  const o=ctx.createOscillator(),g=ctx.createGain();
+  o.type='square';o.frequency.value=1150;
+  g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.0001,t+0.028);
+  o.connect(g);g.connect(ctx.destination);o.start(t);o.stop(t+0.035);
+}
+function playTicks(durMs){
+  if(!state.soundOn)return;const ctx=ac();if(!ctx)return;
+  const start=ctx.currentTime,n=28,dur=durMs/1000;
+  for(let i=0;i<n;i++){
+    const p=i/n;const t=(1-Math.pow(1-p,2.6))*dur;  // ease-out: 점점 느려지는 틱
+    tickAt(ctx,start+t,0.035);
+  }
+}
+function playLand(){
+  if(!state.soundOn)return;const ctx=ac();if(!ctx)return;const t=ctx.currentTime;
+  [[660,0],[990,0.075],[1320,0.15]].forEach(([f,d])=>{
+    const o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='triangle';o.frequency.value=f;
+    g.gain.setValueAtTime(0.0001,t+d);
+    g.gain.exponentialRampToValueAtTime(0.13,t+d+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+d+0.28);
+    o.connect(g);g.connect(ctx.destination);o.start(t+d);o.stop(t+d+0.32);
+  });
+}
+function playDone(){
+  if(!state.soundOn)return;const ctx=ac();if(!ctx)return;const t=ctx.currentTime;
+  [523,659,784,1046].forEach((f,i)=>{
+    const o=ctx.createOscillator(),g=ctx.createGain();
+    o.type='triangle';o.frequency.value=f;const d=i*0.1;
+    g.gain.setValueAtTime(0.0001,t+d);
+    g.gain.exponentialRampToValueAtTime(0.12,t+d+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+d+0.4);
+    o.connect(g);g.connect(ctx.destination);o.start(t+d);o.stop(t+d+0.45);
+  });
+}
+
+/* ---------------- sidebar: count ---------------- */
+el.names.addEventListener('input',updateCount);
+function updateCount(){
+  const n=parseNames(el.names.value).length;
+  el.nameCount.textContent=n+'명';
+  el.nameCount.classList.toggle('zero',n===0);
+  if(!state.confirmed) el.confirmBtn.disabled = n===0;
+}
+updateCount();
+
+/* ---------------- sound toggle ---------------- */
+el.soundBtn.addEventListener('click',()=>{
+  state.soundOn=!state.soundOn;
+  el.soundBtn.classList.toggle('on',state.soundOn);
+  el.soundBtn.textContent=state.soundOn?'🔊':'🔇';
+});
+
+/* ---------------- confirm participants ---------------- */
+el.confirmBtn.addEventListener('click',()=>{
+  if(state.confirmed)return;
+  const names=parseNames(el.names.value);
+  if(names.length===0)return;
+  state.participants=names;
+  state.confirmed=true;
+  el.names.disabled=true;
+  el.sidebar.classList.add('locked');
+  el.confirmBtn.disabled=true;
+  el.confirmBtn.textContent='확정됨';
+  renderConfig();
+});
+
+/* ---------------- reset everything ---------------- */
+el.resetBtn.addEventListener('click',()=>{
+  state.confirmed=false;
+  state.participants=[];
+  state.slots=[];
+  state.remaining=[];
+  state.drawing=false;
+  state.animating=false;
+  el.names.disabled=false;
+  el.sidebar.classList.remove('locked');
+  el.confirmBtn.textContent='확정';
+  el.confirmBtn.disabled=parseNames(el.names.value).length===0;
+  el.stage.innerHTML='';
+  el.stage.appendChild(el.placeholder);
+  el.placeholder.classList.remove('hidden');
+  el.phaseLabel.textContent='대상 확정 대기 중';
+  el.statusPills.innerHTML='';
+});
+
+/* ---------------- CONFIG phase ---------------- */
+let cfg={count:2, slots:[]}; // slots: [{name,capacity}]
+
+function renderConfig(){
+  el.placeholder.classList.add('hidden');
+  el.phaseLabel.textContent='슬롯 설정';
+  const N=state.participants.length;
+  el.statusPills.innerHTML=`<span class="pill">대상 <b>${N}</b>명</span>`;
+
+  // 기본 슬롯 구성: N을 슬롯 수로 최대한 균등 분배
+  if(cfg.slots.length===0){
+    cfg.count=Math.min(2,Math.max(1,N));
+    cfg.slots=defaultSlots(cfg.count,N);
+  }
+
+  el.stage.innerHTML=`
+    <div class="config">
+      <div class="config-head">
+        <div class="eyebrow">STEP 2</div>
+        <h3>슬롯을 나누고 크기를 정하세요</h3>
+        <p>최대 인원수가 서로 다른 슬롯에 ${N}명을 나눠 담습니다. 모든 슬롯 정원의 합이 ${N}명 이상이어야 빠지는 사람 없이 배정돼요.</p>
+      </div>
+
+      <div class="field">
+        <div class="field-top">
+          <div class="lab">슬롯 개수<small>인원을 나눠 담을 그룹의 수</small></div>
+          <div class="stepper">
+            <button id="slotMinus">−</button>
+            <input id="slotCount" type="number" min="1" max="20" value="${cfg.count}">
+            <button id="slotPlus">+</button>
+          </div>
+        </div>
+        <div class="slot-rows" id="slotRows"></div>
+      </div>
+
+      <div class="sum-bar">
+        <div class="meter"><i id="meterFill"></i></div>
+        <div class="sum-info">정원 합 <span class="n" id="sumNum">0</span> / ${N}석</div>
+        <div class="sum-msg" id="sumMsg"></div>
+      </div>
+
+      <div class="start-row">
+        <button class="btn-start" id="startBtn">🎰 추첨 시작</button>
+      </div>
+    </div>`;
+
+  document.getElementById('slotMinus').onclick=()=>changeCount(-1);
+  document.getElementById('slotPlus').onclick=()=>changeCount(1);
+  document.getElementById('slotCount').onchange=(e)=>{
+    let v=parseInt(e.target.value,10);if(isNaN(v))v=1;v=Math.max(1,Math.min(20,v));
+    setCount(v);
+  };
+  document.getElementById('startBtn').onclick=startDrawing;
+  renderSlotRows();
+}
+
+function defaultSlots(count,N){
+  const base=Math.floor(N/count),rem=N%count,out=[];
+  for(let i=0;i<count;i++) out.push({name:'슬롯 '+(i+1),capacity:base+(i<rem?1:0)});
+  return out;
+}
+function changeCount(d){setCount(Math.max(1,Math.min(20,cfg.count+d)));}
+function setCount(v){
+  const N=state.participants.length;
+  cfg.count=v;
+  const cur=cfg.slots.slice(0,v);
+  // 부족하면 기본 채우기
+  while(cur.length<v) cur.push({name:'슬롯 '+(cur.length+1),capacity:0});
+  cfg.slots=cur;
+  // 정원 미설정(0) 슬롯이 있으면 남은 인원을 자동 분배
+  redistributeIfNeeded(N);
+  document.getElementById('slotCount').value=cfg.count;
+  renderSlotRows();
+}
+function redistributeIfNeeded(N){
+  // 합이 0이거나 새로 추가된 0짜리가 있으면 균등 재분배
+  const hasZero=cfg.slots.some(s=>!s.capacity);
+  const sum=cfg.slots.reduce((a,s)=>a+(s.capacity||0),0);
+  if(hasZero || sum===0){
+    const d=defaultSlots(cfg.count,N);
+    cfg.slots=cfg.slots.map((s,i)=>({name:s.name||d[i].name,capacity:s.capacity||d[i].capacity}));
+  }
+}
+function renderSlotRows(){
+  const rows=document.getElementById('slotRows');
+  rows.innerHTML=cfg.slots.map((s,i)=>`
+    <div class="slot-row">
+      <div class="badge">${i+1}</div>
+      <input class="nm" data-i="${i}" value="${esc(s.name)}" placeholder="슬롯 이름" maxlength="14">
+      <div class="cap">
+        <label>정원</label>
+        <input class="cap-inp" data-i="${i}" type="number" min="0" max="999" value="${s.capacity}">
+      </div>
+    </div>`).join('');
+  rows.querySelectorAll('.nm').forEach(inp=>inp.oninput=e=>{cfg.slots[+e.target.dataset.i].name=e.target.value;});
+  rows.querySelectorAll('.cap-inp').forEach(inp=>inp.oninput=e=>{
+    let v=parseInt(e.target.value,10);if(isNaN(v))v=0;v=Math.max(0,v);
+    cfg.slots[+e.target.dataset.i].capacity=v;updateSum();
+  });
+  updateSum();
+}
+function updateSum(){
+  const N=state.participants.length;
+  const sum=cfg.slots.reduce((a,s)=>a+(s.capacity||0),0);
+  document.getElementById('sumNum').textContent=sum;
+  const fill=document.getElementById('meterFill');
+  const msg=document.getElementById('sumMsg');
+  const startBtn=document.getElementById('startBtn');
+  fill.style.width=Math.min(100,(sum/Math.max(N,1))*100)+'%';
+  fill.classList.remove('over','under');
+  msg.classList.remove('ok','over','under');
+  if(sum<N){
+    fill.classList.add('under');
+    msg.classList.add('under');msg.textContent=`${N-sum}석 부족`;
+    startBtn.disabled=true;
+  }else if(sum===N){
+    msg.classList.add('ok');msg.textContent='딱 맞음 ✓';
+    startBtn.disabled=false;
+  }else{
+    fill.classList.add('over');
+    msg.classList.add('over');msg.textContent=`여유 ${sum-N}석`;
+    startBtn.disabled=false;
+  }
+}
+
+/* ---------------- START drawing ---------------- */
+function startDrawing(){
+  const N=state.participants.length;
+  const sum=cfg.slots.reduce((a,s)=>a+(s.capacity||0),0);
+  if(sum<N)return;
+  state.slots=cfg.slots.map(s=>({name:s.name.trim()||'슬롯',capacity:s.capacity,members:[]}));
+  state.remaining=shuffle(state.participants);
+  state.drawing=true;
+  renderSlots();
+}
+
+function renderSlots(){
+  el.phaseLabel.textContent='추첨 진행 중';
+  el.stage.innerHTML=`<div class="slots-grid" id="slotsGrid"></div>`;
+  const grid=document.getElementById('slotsGrid');
+  state.slots.forEach((slot,i)=>{
+    const full=slot.members.length>=slot.capacity;
+    const card=document.createElement('div');
+    card.className='slot'+(full?' full':'');
+    card.dataset.i=i;
+    card.innerHTML=`
+      <div class="slot-head">
+        <div class="sname">${esc(slot.name)}</div>
+        <div class="scount"><span class="cur">${slot.members.length}</span> / ${slot.capacity}</div>
+      </div>
+      <div class="reel-wrap">
+        <div class="reel${full?' disabled':''}" data-i="${i}">
+          <div class="reel-strip"><div class="reel-row">?</div></div>
+          <div class="reel-band"></div>
+          <div class="reel-hint"><span class="tap">↑</span> 카드를 눌러 뽑기</div>
+          <div class="reel-full-tag">✓ 정원 가득 참</div>
+        </div>
+      </div>
+      <div class="members">${slot.members.map((m,k)=>`<span class="chip"><span class="num">${k+1}</span>${esc(m)}</span>`).join('')}</div>`;
+    grid.appendChild(card);
+    card.querySelector('.reel').addEventListener('click',()=>spin(i));
+  });
+  updateProgress();
+}
+
+function updateProgress(){
+  const N=state.participants.length;
+  const placed=N-state.remaining.length;
+  const done=state.remaining.length===0;
+  el.statusPills.innerHTML=
+    `<span class="pill ${done?'done':'live'}">${done?'✓ 추첨 완료':'남은 인원'} ${done?'':'<b>'+state.remaining.length+'</b>명'}</span>`+
+    `<span class="pill">배정 <b>${placed}</b> / ${N}</span>`;
+  if(done) el.phaseLabel.textContent='추첨 완료';
+}
+
+/* ---------------- SPIN (slot machine) ---------------- */
+function spin(idx){
+  if(state.animating)return;
+  const slot=state.slots[idx];
+  if(slot.members.length>=slot.capacity)return;      // 가득 참
+  if(state.remaining.length===0)return;              // 다 뽑음
+  state.animating=true;
+
+  const card=document.querySelector(`.slot[data-i="${idx}"]`);
+  const reel=card.querySelector('.reel');
+  const strip=card.querySelector('.reel-strip');
+  reel.classList.remove('landed');
+  reel.classList.add('spinning','has-result');
+
+  // 당첨자 선정
+  const wIdx=Math.floor(Math.random()*state.remaining.length);
+  const winner=state.remaining[wIdx];
+
+  // 릴 스트립 구성 (장식용 + 마지막에 당첨자)
+  const pool=state.remaining;
+  const COUNT=30;
+  const rows=[];
+  for(let i=0;i<COUNT;i++) rows.push(pool[Math.floor(Math.random()*pool.length)]);
+  rows.push(winner);                                  // target index = COUNT
+  for(let i=0;i<3;i++) rows.push(pool[Math.floor(Math.random()*pool.length)]);
+  strip.innerHTML=rows.map(n=>`<div class="reel-row">${esc(n)}</div>`).join('');
+
+  const target=COUNT;
+  const distance=target*ROW_H;
+
+  // CSS 전환이 아니라 JS로 직접 굴림 → OS '동작 줄이기' 설정과 무관하게 항상 돌아감
+  strip.style.transition='none';
+  strip.style.transform='translateY(0px)';
+
+  const dur=2900+Math.random()*500;
+  playTicks(dur);
+
+  let stopped=false;
+  const t0=performance.now();
+  function frame(now){
+    let p=(now-t0)/dur;
+    if(p>1)p=1;
+    const e=1-Math.pow(1-p,4);                          // 빠르게 촤라락 → 끝에서 감속(easeOutQuart)
+    strip.style.transform=`translateY(${-distance*e}px)`;
+    if(p<1){requestAnimationFrame(frame);}
+    else{onStop();}
+  }
+  requestAnimationFrame(frame);
+
+  // 1단계: 릴이 멈추면 당첨자를 하이라이트로 잠깐 보여주기
+  function onStop(){
+    if(stopped)return;stopped=true;
+    reel.classList.remove('spinning');
+    reel.classList.add('landed');
+    playLand();
+    // 멈춘 결과를 잠깐 보여준 뒤 → 2단계(슬롯에 넣기)
+    setTimeout(commit,5000);
+  }
+
+  // 2단계: 슬롯에 당첨자 넣기
+  function commit(){
+    const ri=state.remaining.indexOf(winner);
+    if(ri>-1)state.remaining.splice(ri,1);
+    slot.members.push(winner);
+
+    // 카운트 + 칩 갱신 (칩이 쏙 들어가는 애니메이션)
+    card.querySelector('.scount .cur').textContent=slot.members.length;
+    const members=card.querySelector('.members');
+    const chip=document.createElement('span');
+    chip.className='chip pop';
+    chip.innerHTML=`<span class="num">${slot.members.length}</span>${esc(winner)}`;
+    members.appendChild(chip);
+
+    // 가득 참 처리
+    if(slot.members.length>=slot.capacity){
+      card.classList.add('full');
+      reel.classList.add('disabled');
+    }
+
+    state.animating=false;
+    updateProgress();
+
+    // 전체 완료
+    if(state.remaining.length===0){
+      // 남은(자리 있지만 인원 없는) 릴 비활성화
+      document.querySelectorAll('.reel:not(.disabled)').forEach(r=>r.classList.add('disabled'));
+      el.doneFlash.classList.remove('go');void el.doneFlash.offsetWidth;el.doneFlash.classList.add('go');
+      playDone();
+    }
+  }
+}
+</script>
+</body>
+</html>

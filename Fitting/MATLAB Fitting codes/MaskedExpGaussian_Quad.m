@@ -49,10 +49,33 @@ pG2 = [     0.5E2,       0.75,   0.08   ];
 pG3 = [     0.5E2,       0.75,   0.08   ];
 pG4 = [     0.5E2,       0.75,   0.08   ];
 
+% 피크별 하한/상한
+lbG1 = [pG1(1)*0.001, pG1(2)-0.2,  pG1(3)-0.2 ];
+lbG2 = [pG2(1)*0.001, pG2(2)-0.05, pG2(3)-0.03];
+lbG3 = [pG3(1)*0.001, pG3(2)-0.05, pG3(3)-0.03];
+lbG4 = [pG4(1)*0.001, pG4(2)-0.05, pG4(3)-0.03];
+lbG_arr = [lbG1, lbG2, lbG3, lbG4];
 
+ubG1 = [pG1(1)*1000, pG1(2)+0.2,  pG1(3)+0.2 ];
+ubG2 = [pG2(1)*100,  pG2(2)+0.02, pG2(3)+0.1 ];
+ubG3 = [pG3(1)*100,  pG3(2)+0.02, pG3(3)+0.1 ];
+ubG4 = [pG4(1)*100,  pG4(2)+0.02, pG4(3)+0.1 ];
+ubG_arr = [ubG1, ubG2, ubG3, ubG4];
+
+
+% 3-파라미터 배경 전용 fittype
+EqnBkg = makeGaussExpFittype(0);   % 피크 0개 = 배경만
+Eqn = makeGaussExpFittype(4);   % Quad
+
+
+% 가우시안 피크 영역 가중치 (기존 그대로)
+weights = ones(size(x));
+gauss_region = (x > 0.42 & x < 0.62);
+weights(gauss_region) = 10;
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 exb = expBKG(x,pB(1),pB(2),pB(3));
-gb = Gaussian(x,pG1(1),pG1(2),pG1(3),pG2(1),pG2(2),pG(3));
-gb = Gaussian(x, pB, pG1, pG2);
+gb = Gaussian_varargin(x, pB, pG1, pG2);
 
 G = exb + gb;
 
@@ -134,11 +157,7 @@ for ii = 1006:1006
     y_bkg     = y(bkg_fit_mask);
     y_bkg_log = log(y_bkg);
 
-    % 3-파라미터 배경 전용 fittype
-    EqnBkg = fittype(@(pB(1),pB(2),pB(3),x) log(expBKG(x,pB(1),pB(2),pB(3))), ...
-        'independent', 'x', ...
-        'coefficients', {'pB(1)','pB(2)','pB(3)'});
-
+    % 3-파라미터 배경 전용 ig & bound
     lb_bkg = [pB(1)*0.001, pB(2)*0.001, pB(3)*0.1];
     ub_bkg = [pB(1)*1000, pB(2)*1000, pB(3)*1.1];
     ig_bkg = [pB(1),     pB(2),     pB(3)    ];
@@ -152,11 +171,10 @@ for ii = 1006:1006
             'Lower', lb_bkg, 'Upper', ub_bkg, ...
             'Robust', 'LAR', ...
             'Weights', w_bkg);
-        bp = coeffvalues(FitBkg);
-        pB(1)f = bp(1);  pB(2)f = bp(2);  pB(3)f = bp(3);
+        pBf = coeffvalues(FitBkg);
     catch ME_bkg
         warning('Frame %d StepB(1) failed (%s). Using initial params.', ii, ME_bkg.message);
-        pB(1)f = pB(1);  pB(2)f = pB(2);  pB(3)f = pB(3);
+        pBf = pB; 
     end
 
     % =========================================================
@@ -165,7 +183,7 @@ for ii = 1006:1006
     m = BKG_MARGIN;
 
     % 음수 파라미터(b처럼 지수에 음수가 올 수 있음)를 고려한 bounds 계산
-    bkg_vals  = [pB(1)f, pB(2)f, pB(3)f];
+    bkg_vals  = pBf;
     lb2_bkg   = zeros(1,3);
     ub2_bkg   = zeros(1,3);
     for bi = 1:3
@@ -182,20 +200,10 @@ for ii = 1006:1006
         end
     end
 
-
-    initialparam2 = [pB(1)f, pB(2)f, pB(3)f, pG1(1), pG1(2), pG1(3), pG2(1), pG2(2), pG(3)];
-    lb2 = [lb2_bkg, pG1(1)*0.001, pG1(2) - 0.2, pG1(3) - 0.2, pG2(1)*0.001, pG2(2) - 0.05, pG(3) - 0.03 ];
-    ub2 = [ub2_bkg, pG1(1)*1000, pG1(2) + 0.2, pG1(3) + 0.2, pG2(1)*100, pG2(2) + 0.02, pG(3) + 0.1  ];
-
-    Eqn = fittype(@(pB(1),pB(2),pB(3),pG1(1),pG1(2),pG1(3),pG2(1),pG2(2),pG(3),x) ...
-        log(GFt1exB(x,pB(1),pB(2),pB(3),pG1(1),pG1(2),pG1(3),pG2(1),pG2(2),pG(3))), ...
-        'independent', 'x', ...
-        'coefficients', {'pB(1)','pB(2)','pB(3)','pG1(1)','pG1(2)','pG1(3)','pG2(1)','pG2(2)','pG(3)'});
-
-    % 가우시안 피크 영역 가중치 (기존 그대로)
-    weights = ones(size(x));
-    gauss_region = (x > 0.42 & x < 0.62);
-    weights(gauss_region) = 10;
+    % Step1 이후 생성된 pBf 및 bound 업데이트
+    initialparam2 = [pBf, pG_arr];
+    lb2 = [lb2_bkg, lbG_arr];
+    ub2 = [ub2_bkg, ubG_arr];
 
     try
         IS = fit(x, y_log, Eqn, ...
@@ -223,7 +231,7 @@ for ii = 1006:1006
 
     % ---- 시각화 (기존 그대로) ----
     exb = expBKG(x, ISp(1), ISp(2), ISp(3));
-    gb  = Gaussian(x, ISp(4), ISp(5), ISp(6), ISp(7), ISp(8), ISp(9));
+    gb  = Gaussian_varargin(x, ISp(4), ISp(5), ISp(6), ISp(7), ISp(8), ISp(9));
     G   = exb + gb;
 
     figure(12);
@@ -245,7 +253,7 @@ for ii = 1006:1006
     plot(x(~exclude_idx), y(~exclude_idx), 'ok', 'MarkerFaceColor', 'k');
     plot(x(exclude_idx),  y(exclude_idx),  'xr', 'MarkerSize', 8, 'LineWidth', 1.5);
     plot(x(bkg_fit_mask), y(bkg_fit_mask), 'b.', 'MarkerSize', 20);  % 배경 피팅에 실제 사용된 점
-    exb_stepB(1) = expBKG(x, pB(1)f, pB(2)f, pB(3)f);
+    exb_stepB(1) = expBKG(x, pBf(1), pBf(2), pBf(3));
     plot(x, exb_stepB(1), '--', 'Color', [1 0.5 0], 'LineWidth', 1.2);  % StepB(1) 배경
     plot(x, exb);
     plot(x, gb);
