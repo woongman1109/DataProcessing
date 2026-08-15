@@ -36,18 +36,23 @@ figure;
 plot(qs,Is(:,1000));
 
 %%
-targ = 378;
+targ = 20;
 x = qs;
 y = Is(:,targ);
 
-% [pB]      expScale    slope   linearBG
-pB =    [   1.3e1,      3.8,    140];
+% [pB]      expScale        slope       linearBG
+pB =        [   1.3e1,      3.8,        80          ];
+lb_bkg =    [pB(1)*0.001,   3.5,        pB(3)*0.1   ];
+ub_bkg =    [pB(1)*1000,    pB(2)*1E3,  pB(3)*1.1   ];
 
-% [pG]      Amplitude    Mean    FWHM
-pG1 = [     2E2,         0.55,   0.15   ];
-pG2 = [     0.5E2,       0.75,   0.08   ];
-pG3 = [     0.5E2,       0.75,   0.08   ];
-pG4 = [     0.5E2,       0.75,   0.08   ];
+% [pG]      Amplitude   Mean        FWHM
+pG1 = [     2E2,        0.55,       0.15    ];
+pG2 = [     0.5E2,      0.75,       0.08    ];
+pG3 = [     50,        1.29,       0.23    ];
+pG4 = [     80,        1.83,       0.23    ];
+pG_arr = [pG1, pG2, pG3, pG4];
+nPeak  = numel(pG_arr)/3;             % 피크 개수 자동 산출
+pG_mat = reshape(pG_arr, 3, []).';    % nPeak×3 행렬: 각 행 = [amp, mean, FWHM]
 
 % 피크별 하한/상한
 lbG1 = [pG1(1)*0.001, pG1(2)-0.2,  pG1(3)-0.2 ];
@@ -62,22 +67,31 @@ ubG3 = [pG3(1)*100,  pG3(2)+0.02, pG3(3)+0.1 ];
 ubG4 = [pG4(1)*100,  pG4(2)+0.02, pG4(3)+0.1 ];
 ubG_arr = [ubG1, ubG2, ubG3, ubG4];
 
+% Background용 pGB
+pGB =  [     100,        1.4,        0.90   ];
+lbGB = [pGB(1)*0.001, pGB(2)-0.3, pGB(3)-0.5];
+ubGB = [pGB(1)*100,   pGB(2)+0.3, pGB(3)+1.0];
 
 % 3-파라미터 배경 전용 fittype
-EqnBkg = makeGaussExpFittype(0);   % 피크 0개 = 배경만
-Eqn = makeGaussExpFittype(4);   % Quad
+EqnBkg = makeGaussExpFittype(0);          % 배경만
+Eqn    = makeGaussExpFittype(nPeak + 1);  % 진짜 피크 + pGB 1개
 
 
-% 가우시안 피크 영역 가중치 (기존 그대로)
+% 가우시안 피크 영역 가중치 (모든 피크 주변 부스트)
 weights = ones(size(x));
-gauss_region = (x > 0.42 & x < 0.62);
+gauss_region = false(size(x));
+weight_region_ratio = 0.7; %% Width of weighted region, based on FWHM
+for k = 1:nPeak
+    gauss_region = gauss_region | ...
+        (x > pG_mat(k,2) - weight_region_ratio*pG_mat(k,3) & x < pG_mat(k,2) + weight_region_ratio*pG_mat(k,3));
+end
 weights(gauss_region) = 10;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 exb = expBKG(x,pB(1),pB(2),pB(3));
-gb = Gaussian_varargin(x, pB, pG1, pG2);
-
-G = exb + gb;
+gb  = Gaussian_varargin(x, pG_arr);
+gb_pGB = Gaussian_varargin(x, pGB);
+G = exb + gb + gb_pGB;
 
 figure(11);
 plot(x,y,'-ok'); hold on
@@ -93,11 +107,16 @@ window_size = 2*n + 1;
 
 % ------- 초기 Gaussian 마스킹 ------- %
 % ----- Gaussian의 exp 흡수 방지 ------%
-FWHM_MASK_FACTOR = 1.2;   % 피크 마스킹 범위 : ±FWHM_MASK_FACTOR × FWHM
+NOISE_MASK_FACTOR = 1.2;   % 피크 마스킹 범위 : ±NOISE_MASK_FACTOR × FWHM
 BKG_MARGIN       = 0.001;  % StepB(2) 배경 파라미터 허용 범위 (±15%)
-ForcedUnmask     = 0.02;  % 데이터 양끝 각 비율만큼은 마스킹 무시하고 배경 피팅에 강제 포함
+ForcedUnmask_head = 0.41;  
+ForcedUnmask_tail = 2.2; 
 
-for ii = 1006:1006
+% ------ y축 범위 고정 ----- %
+y_max_all = max(Is(Is > 0), [], 'omitnan');
+
+frame_start = 1;
+for ii = frame_start:Na
     y     = Is(:,ii);
     y_log = log(y);
 
@@ -119,19 +138,17 @@ for ii = 1006:1006
     % =========================================================
 
     % 현재 프레임의 초기 피크 위치·폭을 이용해 피크 구역 마스킹
-    %   1번 피크: 중심 pG1(2), FWHM pG1(3)
-    %   2번 피크: 중심 pG2(2), FWHM pG(3)
-    if ii == 1
-        peak_centers = [pG1(2), pG2(2)];
-        peak_fwhms   = [pG1(3), pG(3)];
+    if ii == frame_start
+        peak_centers = pG_mat(:,2).';                    % 모든 피크의 초기 중심
+        peak_fwhms   = pG_mat(:,3).';                    % 모든 피크의 초기 FWHM
     else
-        peak_centers = [parameter(ii-1, 5), parameter(ii-1, 8)];
-        peak_fwhms   = [parameter(ii-1, 6), parameter(ii-1, 9)];
+        peak_centers = parameter(ii-1, 3*(1:nPeak)+2);   % 이전 프레임 중심들 (5,8,11,14열)
+        peak_fwhms   = parameter(ii-1, 3*(1:nPeak)+3);   % 이전 프레임 FWHM들 (6,9,12,15열)
     end
 
     peak_mask = false(size(x));
     for pk_idx = 1:numel(peak_centers)
-        half_range = peak_fwhms(pk_idx) * FWHM_MASK_FACTOR;
+        half_range = peak_fwhms(pk_idx) * NOISE_MASK_FACTOR;
         peak_mask  = peak_mask | ...
             (x >= peak_centers(pk_idx) - half_range & ...
              x <= peak_centers(pk_idx) + half_range);
@@ -141,11 +158,7 @@ for ii = 1006:1006
 
     % ── ForcedUnmask: 데이터 양끝 일정 비율은 강제로 배경 피팅에 포함 ──
     % (단, exclude_idx로 걸린 진짜 불량점은 여전히 제외)
-    n_pts      = numel(x);
-    n_edge     = round(n_pts * ForcedUnmask);
-    forced_idx = false(n_pts, 1);
-    forced_idx(1:n_edge)         = true;   % 앞쪽(낮은 q) 끝
-    forced_idx(end-n_edge+1:end) = true;   % 뒤쪽(높은 q) tail
+    forced_idx = (x <= ForcedUnmask_head) | (x >= ForcedUnmask_tail);
     bkg_fit_mask = (bkg_fit_mask | forced_idx) & ~exclude_idx;
     % ───────────────────────────────────────────────
 
@@ -157,17 +170,14 @@ for ii = 1006:1006
     y_bkg     = y(bkg_fit_mask);
     y_bkg_log = log(y_bkg);
 
-    % 3-파라미터 배경 전용 ig & bound
-    lb_bkg = [pB(1)*0.001, pB(2)*0.001, pB(3)*0.1];
-    ub_bkg = [pB(1)*1000, pB(2)*1000, pB(3)*1.1];
-    ig_bkg = [pB(1),     pB(2),     pB(3)    ];
+
 
     % 로그 도메인 뒤쪽 꼬리 편향 보정: 큰 값(앞쪽)에 가중치 부여
     w_bkg = power(y_bkg / max(y_bkg),2);
 
     try
         FitBkg = fit(x_bkg, y_bkg_log, EqnBkg, ...
-            'Start', ig_bkg, ...
+            'Start', pB, ...
             'Lower', lb_bkg, 'Upper', ub_bkg, ...
             'Robust', 'LAR', ...
             'Weights', w_bkg);
@@ -201,9 +211,9 @@ for ii = 1006:1006
     end
 
     % Step1 이후 생성된 pBf 및 bound 업데이트
-    initialparam2 = [pBf, pG_arr];
-    lb2 = [lb2_bkg, lbG_arr];
-    ub2 = [ub2_bkg, ubG_arr];
+    initialparam2 = [pBf, pG_arr, pGB];
+    lb2 = [lb2_bkg, lbG_arr, lbGB];
+    ub2 = [ub2_bkg, ubG_arr, ubGB];
 
     try
         IS = fit(x, y_log, Eqn, ...
@@ -214,12 +224,12 @@ for ii = 1006:1006
             'Weights', weights);
 
     catch ME_full
-        % StepB(2) 실패 시 배경 tight bounds 없이 폴백
+         % StepB(2) 실패 시 배경 tight bounds 없이 폴백
         warning('Frame %d StepB(2) failed (%s). Falling back to single-step.', ii, ME_full.message);
-        lb_fb = [lb_bkg, lb2(4:9)];
-        ub_fb = [ub_bkg, ub2(4:9)];
+        lb_fb = [lb_bkg, lbG_arr, lbGB];
+        ub_fb = [ub_bkg, ubG_arr, ubGB];
         IS = fit(x, y_log, Eqn, ...
-            'Start', [pB(1),pB(2),pB(3),pG1(1),pG1(2),pG1(3),pG2(1),pG2(2),pG(3)], ...
+            'Start', [pB, pG_arr, pGB], ...
             'Lower', lb_fb, 'Upper', ub_fb, ...
             'Robust', 'LAR', ...
             'Exclude', exclude_idx, ...
@@ -229,18 +239,20 @@ for ii = 1006:1006
     ISp = coeffvalues(IS);
     parameter(ii,:) = ISp';
 
-    % ---- 시각화 (기존 그대로) ----
-    exb = expBKG(x, ISp(1), ISp(2), ISp(3));
-    gb  = Gaussian_varargin(x, ISp(4), ISp(5), ISp(6), ISp(7), ISp(8), ISp(9));
-    G   = exb + gb;
+    % ---- 시각화 ----
+    exb    = expBKG(x, ISp(1), ISp(2), ISp(3));
+    gb_pG  = Gaussian_varargin(x, ISp(4 : 3+3*nPeak));   % 진짜 피크만 (pGB 제외)
+    gb_pGB = Gaussian_varargin(x, ISp(end-2:end));       % pGB 단독
+    gb     = gb_pG + gb_pGB;                             % 전체 Gaussian 합
+    G      = exb + gb;                                   % 최종 (배경+전체)
 
     figure(12);
     y_plot = y;
     y_plot(mask1) = NaN;
     plot(x, y_plot, '-k'); hold on
-    y_lim_patch = [min(y(~exclude_idx))*0.5, max(y(~exclude_idx))*2];
+    y_lim_patch = [0, y_max_all*1.1];
     for pk_idx = 1:numel(peak_centers)
-        half_range = peak_fwhms(pk_idx) * FWHM_MASK_FACTOR;
+        half_range = peak_fwhms(pk_idx) * NOISE_MASK_FACTOR;
         x_lo = peak_centers(pk_idx) - half_range;
         x_hi = peak_centers(pk_idx) + half_range;
         patch([x_lo x_hi x_hi x_lo], ...
@@ -253,12 +265,40 @@ for ii = 1006:1006
     plot(x(~exclude_idx), y(~exclude_idx), 'ok', 'MarkerFaceColor', 'k');
     plot(x(exclude_idx),  y(exclude_idx),  'xr', 'MarkerSize', 8, 'LineWidth', 1.5);
     plot(x(bkg_fit_mask), y(bkg_fit_mask), 'b.', 'MarkerSize', 20);  % 배경 피팅에 실제 사용된 점
-    exb_stepB(1) = expBKG(x, pBf(1), pBf(2), pBf(3));
-    plot(x, exb_stepB(1), '--', 'Color', [1 0.5 0], 'LineWidth', 1.2);  % StepB(1) 배경
+    exb_step1 = expBKG(x, pBf(1), pBf(2), pBf(3));
+    plot(x, exb_step1, '--', 'Color', [1 0.5 0], 'LineWidth', 1.2);  % Step1 배경
     plot(x, exb);
-    plot(x, gb);
-    plot(x, G); hold off
+    plot(x, gb_pG,  'Color', [0 0.6 0], 'LineWidth', 1.5);          % pG만 합성 (초록)
+    plot(x, gb_pGB, ':', 'Color', [0.5 0 0.5], 'LineWidth', 1.2);   % pGB 단독 (보라 점선)
+    plot(x, gb, '--', 'Color', [0 0.2 0.7], 'LineWidth', 1.5);      % gb 단독
+    plot(x, G, 'LineWidth', 1.5); hold off
+    ylim([0, y_max_all*1.02]);
     title(num2str(ii));
+
+    % ── pB 피팅 결과 + 경계를 표로 표시 (오른쪽 위 모서리 정렬) ──
+    delete(findall(gcf, 'Tag', 'pBtable'));
+    ax = gca;
+    pB_labels = {'expScale', 'slope', 'linearBG'};
+    txt = sprintf('%-9s %9s %9s %9s\n', 'Param', 'lb', 'value', 'ub');
+    txt = [txt sprintf('%s\n', repmat('-', 1, 39))];
+    for pp = 1:3
+        val = ISp(pp);  lo = lb_bkg(pp);  hi = ub_bkg(pp);
+        span = hi - lo;  flag = '';
+        if abs(val-lo) <= 0.01*span || abs(val-hi) <= 0.01*span
+            flag = ' *';
+        end
+        txt = [txt sprintf('%-9s %9.4g %9.4g %9.4g%s\n', pB_labels{pp}, lo, val, hi, flag)];
+    end
+    text(ax, 0.98, 0.98, txt, ...
+        'Units', 'normalized', ...              % 축 기준 0~1 좌표
+        'HorizontalAlignment', 'right', ...     % 오른쪽 모서리 기준
+        'VerticalAlignment', 'top', ...         % 위 모서리 기준
+        'FontName', 'Courier New', ...
+        'FontSize', 11, ...                     % 이제 키워도 안 넘침
+        'BackgroundColor', 'w', ...
+        'EdgeColor', 'k', ...
+        'Margin', 4, ...
+        'Tag', 'pBtable');
 end
 
 
