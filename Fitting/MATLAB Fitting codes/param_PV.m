@@ -36,9 +36,20 @@ ubG_arr = [ubG1, ubG2, ubG3, ubG4];
 
 
 % Background용 pGB — eta=0 고정(순수 Gaussian). lb=ub=0 으로 자유도 제거
-pGB =  [     100,        1.4,        0.90,       0    ];
-lbGB = [pGB(1)*0.001, pGB(2)-0.3, pGB(3)-0.5, 0];
-ubGB = [pGB(1)*100,   pGB(2)+0.15, pGB(3)+2.0, 0];
+% pGB 여러 개 가능: pGB1, pGB2, ... 를 pGB_arr로 묶어 관리
+% [pGB]     Amplitude   Mean    FWHM    eta(고정 0)
+pGB1 = [    100,        1.4,    0.90,   0   ];
+pGB2 = [    100,        0.6,    0.90,   0   ];
+pGB_arr = [pGB1, pGB2];
+nPGB    = numel(pGB_arr)/4;            % pGB 개수 자동 산출
+
+lbGB1 = [pGB1(1)*0.001, pGB1(2)-0.3, pGB1(3)-0.5, 0];
+lbGB2 = [pGB2(1)*0.001, pGB2(2)-0.3, pGB2(3)-0.5, 0];
+lbGB_arr = [lbGB1, lbGB2];
+
+ubGB1 = [pGB1(1)*100,   pGB1(2)+0.15, pGB1(3)+2.0, 0];
+ubGB2 = [pGB2(1)*100,   pGB2(2)+0.15, pGB2(3)+2.0, 0];
+ubGB_arr = [ubGB1, ubGB2];
 
 
 % --------------------------------------- %
