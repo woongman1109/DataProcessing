@@ -1,4 +1,9 @@
+% ---- 경로 설정 ----
+addpath('..');
+addpath('C:\Users\...\Fitting\MATLAB Fitting codes');
+% -------------------
 
+%%
 % file load
 clear
 clc
@@ -10,7 +15,7 @@ I = PEDOT_3_1Dplotstack_qz_forfit(:,2:end);
 clear PEDOT_3_1Dplotstack_qz_forfit
 N = size(I,2);
 %% accumulation
-accum = 2;
+accum = 10;
 exp_time = 6;
 Na = N/accum;
 Ia = zeros(length(q),Na);
@@ -25,62 +30,32 @@ for ii = 1:Na
 end
    
 %% plot
-figure;
-plot(q,Ia(:,1000));
+figure(1);
+plot(q,Ia(:,Na));
 %% q del
 qdel = find(q>0.35 & q<2.5);
 qs = q(qdel);
 Is = Ia(qdel,:);
 
-figure;
-plot(qs,Is(:,1000));
+figure(1);
+plot(qs,Is(:,Na));
 
 %%
 targ = 20;
 x = qs;
 y = Is(:,targ);
 
-% [pB]      expScale        slope       linearBG
-pB =        [   1.3e1,      3.8,        80          ];
-lb_bkg =    [pB(1)*0.001,   3.5,        pB(3)*0.1   ];
-ub_bkg =    [pB(1)*1000,    pB(2)*1E3,  pB(3)*1.1   ];
+% parameter 파일 불러오기
+param_PV;
+strip_eta;
 
-% [pG]      Amplitude   Mean        FWHM
-pG1 = [     2E2,        0.55,       0.15    ];
-pG2 = [     0.5E2,      0.75,       0.08    ];
-pG3 = [     50,        1.29,       0.23    ];
-pG4 = [     80,        1.83,       0.23    ];
-pG_arr = [pG1, pG2, pG3, pG4];
-nPeak  = numel(pG_arr)/3;             % 피크 개수 자동 산출
-pG_mat = reshape(pG_arr, 3, []).';    % nPeak×3 행렬: 각 행 = [amp, mean, FWHM]
-
-% 피크별 하한/상한
-lbG1 = [pG1(1)*0.001, pG1(2)-0.2,  pG1(3)-0.2 ];
-lbG2 = [pG2(1)*0.001, pG2(2)-0.05, pG2(3)-0.03];
-lbG3 = [pG3(1)*0.001, pG3(2)-0.05, pG3(3)-0.03];
-lbG4 = [pG4(1)*0.001, pG4(2)-0.05, pG4(3)-0.03];
-lbG_arr = [lbG1, lbG2, lbG3, lbG4];
-
-ubG1 = [pG1(1)*1000, pG1(2)+0.2,  pG1(3)+0.2 ];
-ubG2 = [pG2(1)*100,  pG2(2)+0.02, pG2(3)+0.1 ];
-ubG3 = [pG3(1)*100,  pG3(2)+0.02, pG3(3)+0.1 ];
-ubG4 = [pG4(1)*100,  pG4(2)+0.02, pG4(3)+0.1 ];
-ubG_arr = [ubG1, ubG2, ubG3, ubG4];
-
-% Background용 pGB
-pGB =  [     100,        1.4,        0.90   ];
-lbGB = [pGB(1)*0.001, pGB(2)-0.3, pGB(3)-0.5];
-ubGB = [pGB(1)*100,   pGB(2)+0.3, pGB(3)+1.0];
-
-% 3-파라미터 배경 전용 fittype
+% 파라미터 배경 전용 fittype
 EqnBkg = makeGaussExpFittype(0);          % 배경만
 Eqn    = makeGaussExpFittype(nPeak + 1);  % 진짜 피크 + pGB 1개
-
 
 % 가우시안 피크 영역 가중치 (모든 피크 주변 부스트)
 weights = ones(size(x));
 gauss_region = false(size(x));
-weight_region_ratio = 0.7; %% Width of weighted region, based on FWHM
 for k = 1:nPeak
     gauss_region = gauss_region | ...
         (x > pG_mat(k,2) - weight_region_ratio*pG_mat(k,3) & x < pG_mat(k,2) + weight_region_ratio*pG_mat(k,3));
@@ -93,30 +68,22 @@ gb  = Gaussian_varargin(x, pG_arr);
 gb_pGB = Gaussian_varargin(x, pGB);
 G = exb + gb + gb_pGB;
 
-figure(11);
+figure(1);
 plot(x,y,'-ok'); hold on
 plot(x,exb); hold on
 plot(x,gb); hold on
 plot(x,G); hold off
 
 %%
-% ---- 0인 값과 너무 낮은 이상치 마스킹 ---- %
-% ----- n: 윈도우의 반경 -> 한쪽 길이 ------%
-n = 50; 
-window_size = 2*n + 1; 
-
-% ------- 초기 Gaussian 마스킹 ------- %
-% ----- Gaussian의 exp 흡수 방지 ------%
-NOISE_MASK_FACTOR = 1.2;   % 피크 마스킹 범위 : ±NOISE_MASK_FACTOR × FWHM
-BKG_MARGIN       = 0.001;  % StepB(2) 배경 파라미터 허용 범위 (±15%)
-ForcedUnmask_head = 0.41;  
-ForcedUnmask_tail = 2.2; 
-
 % ------ y축 범위 고정 ----- %
 y_max_all = max(Is(Is > 0), [], 'omitnan');
 
+% 파라미터 파일 재확인 (수동 피팅용)
+param_PV;
+strip_eta;
+
 frame_start = 1;
-for ii = frame_start:Na
+for ii = frame_start:40:Na
     y     = Is(:,ii);
     y_log = log(y);
 
@@ -138,13 +105,23 @@ for ii = frame_start:Na
     % =========================================================
 
     % 현재 프레임의 초기 피크 위치·폭을 이용해 피크 구역 마스킹
+    
+    % %{
+    peak_centers = pG_mat(:,2).';
+    peak_fwhms   = pG_mat(:,3).';
+    %}
+
+    %{
     if ii == frame_start
         peak_centers = pG_mat(:,2).';                    % 모든 피크의 초기 중심
         peak_fwhms   = pG_mat(:,3).';                    % 모든 피크의 초기 FWHM
     else
-        peak_centers = parameter(ii-1, 3*(1:nPeak)+2);   % 이전 프레임 중심들 (5,8,11,14열)
-        peak_fwhms   = parameter(ii-1, 3*(1:nPeak)+3);   % 이전 프레임 FWHM들 (6,9,12,15열)
+        % parameter 열: [b1 b2 b3, a1 m1 w1 e1, a2 m2 w2 e2, ...]
+        % k번째 피크 mean = 4k+1, FWHM = 4k+2
+        peak_centers = parameter(ii-1, 4*(1:nPeak)+1);   % 이전 프레임 중심들 (5,9,13,17열)
+        peak_fwhms   = parameter(ii-1, 4*(1:nPeak)+2);   % 이전 프레임 FWHM들 (6,10,14,18열)
     end
+    %}
 
     peak_mask = false(size(x));
     for pk_idx = 1:numel(peak_centers)
@@ -246,7 +223,7 @@ for ii = frame_start:Na
     gb     = gb_pG + gb_pGB;                             % 전체 Gaussian 합
     G      = exb + gb;                                   % 최종 (배경+전체)
 
-    figure(12);
+    figure(2);
     y_plot = y;
     y_plot(mask1) = NaN;
     plot(x, y_plot, '-k'); hold on
@@ -299,184 +276,128 @@ for ii = frame_start:Na
         'EdgeColor', 'k', ...
         'Margin', 4, ...
         'Tag', 'pBtable');
+
+    % ── 피크 파라미터(pG + pGB) 표 표시 (왼쪽 위 모서리 정렬) ──
+    delete(findall(gcf, 'Tag', 'pGtable'));
+    % ISp 배치: [b1 b2 b3, a1 m1 w1, a2 m2 w2, ...]
+    %   마지막 피크(nPeak+1번째)가 pGB
+    nTotalPk = nPeak + 1;
+    txtP = sprintf('%-5s %8s %7s %7s\n', 'Peak', 'Amp', 'q', 'FWHM');
+    txtP = [txtP sprintf('%s\n', repmat('-', 1, 37))];
+    for pk = 1:nTotalPk
+        base = 3 + 3*(pk-1);          % 이 피크의 첫 파라미터 위치
+        A   = ISp(base+1);
+        mu  = ISp(base+2);
+        fw  = ISp(base+3);
+        if pk <= nPeak
+            name = sprintf('pG%d', pk);
+        else
+            name = 'pGB';             % 마지막은 배경 보조
+        end
+        txtP = [txtP sprintf('%-5s %8.3g %7.4f %7.4f\n', name, A, mu, fw)];
+    end
+    text(gca, 0.02, 0.98, txtP, ...
+        'Units', 'normalized', ...
+        'HorizontalAlignment', 'left', ...      % 왼쪽 모서리 기준
+        'VerticalAlignment', 'top', ...         % 위 모서리 기준
+        'FontName', 'Courier New', ...
+        'FontSize', 10, ...
+        'BackgroundColor', 'w', ...
+        'EdgeColor', 'k', ...
+        'Margin', 4, ...
+        'Tag', 'pGtable');
 end
 
 
-%% Value plot (4x2 배치: 왼쪽=Peak1, 오른쪽=Peak2)
-% 단일 가우시안 면적 계산용 (원본의 sum(Gaussian(x,a,b,c)) 동작 보존)
-singleGauss = @(x,a,b,c) a*exp(-((x-b).^2) ./ (sqrt(2)*(c/(2*sqrt(2*log(2))))).^2);
-
-% --- Peak 1: parameter(:, 4:6),  Peak 2: parameter(:, 7:9) ---
-Areaval1 = zeros(Na,1);
-Areaval2 = zeros(Na,1);
-for ii = 1:Na
-    Areaval1(ii) = sum(singleGauss(x, parameter(ii,4), parameter(ii,5), parameter(ii,6)));
-    Areaval2(ii) = sum(singleGauss(x, parameter(ii,7), parameter(ii,8), parameter(ii,9)));
-end
+%% Value plot (4x nPeak 배치: 행=지표, 열=피크)
+% parameter 열: [b1 b2 b3, a1 m1 w1, a2 m2 w2, ...]  (Gaussian, 피크당 3param)
+%   k번째 피크: amp=3k+1, mean=3k+2, FWHM=3k+3
 times = (1:Na).*((exp_time*accum)/60);
-
-Ival1 = parameter(:,4);   Ival2 = parameter(:,7);
-qval1 = parameter(:,5);   qval2 = parameter(:,8);
-FWHM1 = parameter(:,6);   FWHM2 = parameter(:,9);
-
-% smoothing
-Asmooth1    = smooth(times, Areaval1, 0.15, 'loess');
-Asmooth2    = smooth(times, Areaval2, 0.15, 'loess');
-Ismooth1    = smooth(times, Ival1,    0.15, 'loess');
-Ismooth2    = smooth(times, Ival2,    0.15, 'loess');
-qsmooth1    = smooth(times, qval1,    0.15, 'loess');
-qsmooth2    = smooth(times, qval2,    0.15, 'loess');
-FWHMsmooth1 = smooth(times, FWHM1,    0.15, 'loess');
-FWHMsmooth2 = smooth(times, FWHM2,    0.15, 'loess');
-
+times = times(:);
+ 
+% --- 각 피크별 지표를 행렬로 추출 (열 = 피크) ---
+Areaval = zeros(Na, nPeak);
+Ival    = zeros(Na, nPeak);
+qval    = zeros(Na, nPeak);
+FWHMval = zeros(Na, nPeak);
+for k = 1:nPeak
+    base = 3*k + 1;                     % k번째 피크 amp 위치
+    for ii = 1:Na
+        Areaval(ii,k) = sum(Gaussian_varargin(x, parameter(ii, base:base+2)));
+    end
+    Ival(:,k)    = parameter(:, base);      % amplitude
+    qval(:,k)    = parameter(:, base+1);    % mean
+    FWHMval(:,k) = parameter(:, base+2);    % FWHM
+end
+ 
+% --- smoothing (지표별로 피크 전체를 한 번에) ---
+Asmooth    = zeros(Na, nPeak);
+Ismooth    = zeros(Na, nPeak);
+qsmooth    = zeros(Na, nPeak);
+FWHMsmooth = zeros(Na, nPeak);
+for k = 1:nPeak
+    Asmooth(:,k)    = smooth(times, Areaval(:,k), 0.15, 'loess');
+    Ismooth(:,k)    = smooth(times, Ival(:,k),    0.15, 'loess');
+    qsmooth(:,k)    = smooth(times, qval(:,k),    0.15, 'loess');
+    FWHMsmooth(:,k) = smooth(times, FWHMval(:,k), 0.15, 'loess');
+end
+ 
 figure('Name', 'Value Analysis');
-t1 = tiledlayout(4, 2, 'TileSpacing', 'compact', 'Padding', 'compact');
-
-% Row 1: Area (Peak1 | Peak2)
-nexttile;
-plot(times', Areaval1); hold on; plot(times', Asmooth1); hold off
-axis tight; xlabel('time, min'); ylabel('A_{smooth}'); title('Area — Peak 1');
-
-nexttile;
-plot(times', Areaval2); hold on; plot(times', Asmooth2); hold off
-axis tight; xlabel('time, min'); ylabel('A_{smooth}'); title('Area — Peak 2');
-
+t1 = tiledlayout(4, nPeak, 'TileSpacing', 'compact', 'Padding', 'compact');
+ 
+% Row 1: Area
+for k = 1:nPeak
+    nexttile;
+    plot(times, Areaval(:,k)); hold on; plot(times, Asmooth(:,k)); hold off
+    axis tight; xlabel('time, min'); ylabel('Area'); title(sprintf('Area — Peak %d', k));
+end
 % Row 2: Peak Intensity
-nexttile;
-plot(times', Ival1); hold on; plot(times', Ismooth1); hold off
-axis tight; xlabel('time, min'); ylabel('I_{smooth}'); title('Peak Intensity — Peak 1');
-
-nexttile;
-plot(times', Ival2); hold on; plot(times', Ismooth2); hold off
-axis tight; xlabel('time, min'); ylabel('I_{smooth}'); title('Peak Intensity — Peak 2');
-
+for k = 1:nPeak
+    nexttile;
+    plot(times, Ival(:,k)); hold on; plot(times, Ismooth(:,k)); hold off
+    axis tight; xlabel('time, min'); ylabel('I'); title(sprintf('Peak Intensity — Peak %d', k));
+end
 % Row 3: Q Position
-nexttile;
-plot(times', qval1); hold on; plot(times', qsmooth1); hold off
-axis tight; xlabel('time, min'); ylabel('q_{smooth}, A^{-1}'); title('Q Position — Peak 1');
-
-nexttile;
-plot(times', qval2); hold on; plot(times', qsmooth2); hold off
-axis tight; xlabel('time, min'); ylabel('q_{smooth}, A^{-1}'); title('Q Position — Peak 2');
-
+for k = 1:nPeak
+    nexttile;
+    plot(times, qval(:,k)); hold on; plot(times, qsmooth(:,k)); hold off
+    axis tight; xlabel('time, min'); ylabel('q, A^{-1}'); title(sprintf('Q Position — Peak %d', k));
+end
 % Row 4: FWHM
-nexttile;
-plot(times', FWHM1); hold on; plot(times', FWHMsmooth1); hold off
-axis tight; xlabel('time, min'); ylabel('FWHM_{smooth}, A^{-1}'); title('FWHM — Peak 1');
-
-nexttile;
-plot(times', FWHM2); hold on; plot(times', FWHMsmooth2); hold off
-axis tight; xlabel('time, min'); ylabel('FWHM_{smooth}, A^{-1}'); title('FWHM — Peak 2');
-
+for k = 1:nPeak
+    nexttile;
+    plot(times, FWHMval(:,k)); hold on; plot(times, FWHMsmooth(:,k)); hold off
+    axis tight; xlabel('time, min'); ylabel('FWHM, A^{-1}'); title(sprintf('FWHM — Peak %d', k));
+end
+ 
 title(t1, 'Calculated Values (Raw vs Smooth)');
-
-%% Percent calculation (4x2 배치: 왼쪽=Peak1, 오른쪽=Peak2)
-% 퍼센트 변화
-Aper1    = ((Areaval1./Areaval1(1)-1).*100);
-Aper2    = ((Areaval2./Areaval2(1)-1).*100);
-Iper1    = ((Ival1   ./Ival1(1)   -1).*100);
-Iper2    = ((Ival2   ./Ival2(1)   -1).*100);
-qper1    = ((qval1   ./qval1(1)   -1).*100);
-qper2    = ((qval2   ./qval2(1)   -1).*100);
-FWHMper1 = ((FWHM1   ./FWHM1(1)   -1).*100);
-FWHMper2 = ((FWHM2   ./FWHM2(1)   -1).*100);
-
-Apersmooth1    = smooth(times, Aper1,    0.15, 'loess');
-Apersmooth2    = smooth(times, Aper2,    0.15, 'loess');
-Ipersmooth1    = smooth(times, Iper1,    0.15, 'loess');
-Ipersmooth2    = smooth(times, Iper2,    0.15, 'loess');
-qpersmooth1    = smooth(times, qper1,    0.15, 'loess');
-qpersmooth2    = smooth(times, qper2,    0.15, 'loess');
-FWHMpersmooth1 = smooth(times, FWHMper1, 0.15, 'loess');
-FWHMpersmooth2 = smooth(times, FWHMper2, 0.15, 'loess');
-
-figure('Name', 'Percent Change Analysis');
-t2 = tiledlayout(4, 2, 'TileSpacing', 'compact', 'Padding', 'compact');
-
-% Row 1: Delta Area
-nexttile;
-plot(times', Aper1); hold on; plot(times', Apersmooth1); hold off
-axis tight; xlabel('time, min'); ylabel('\DeltaArea, %'); title('\Delta Area — Peak 1');
-
-nexttile;
-plot(times', Aper2); hold on; plot(times', Apersmooth2); hold off
-axis tight; xlabel('time, min'); ylabel('\DeltaArea, %'); title('\Delta Area — Peak 2');
-
-% Row 2: Delta Intensity
-nexttile;
-plot(times', Iper1); hold on; plot(times', Ipersmooth1); hold off
-axis tight; xlabel('time, min'); ylabel('\DeltaI, %'); title('\Delta Intensity — Peak 1');
-
-nexttile;
-plot(times', Iper2); hold on; plot(times', Ipersmooth2); hold off
-axis tight; xlabel('time, min'); ylabel('\DeltaI, %'); title('\Delta Intensity — Peak 2');
-
-% Row 3: Delta Q
-nexttile;
-plot(times', qper1); hold on; plot(times', qpersmooth1); hold off
-axis tight; xlabel('time, min'); ylabel('\DeltaQ, %'); title('\Delta Q — Peak 1');
-
-nexttile;
-plot(times', qper2); hold on; plot(times', qpersmooth2); hold off
-axis tight; xlabel('time, min'); ylabel('\DeltaQ, %'); title('\Delta Q — Peak 2');
-
-% Row 4: Delta FWHM
-nexttile;
-plot(times', FWHMper1); hold on; plot(times', FWHMpersmooth1); hold off
-axis tight; xlabel('time, min'); ylabel('\DeltaFWHM, %'); title('\Delta FWHM — Peak 1');
-
-nexttile;
-plot(times', FWHMper2); hold on; plot(times', FWHMpersmooth2); hold off
-axis tight; xlabel('time, min'); ylabel('\DeltaFWHM, %'); title('\Delta FWHM — Peak 2');
-
-title(t2, 'Percentage Change (%) Analysis');
-
+ 
 %%
 save parameter.mat parameter
-
+ 
 % Save total fitted data as .xlsx file
 tmpFN = strcat("fitted_", dataName);
 fileName = strcat(tmpFN, ".xlsx");
+ 
+% 시간축 (Sheet2)
 xlswrite(fileName, times, "Sheet2", "A");
-
-% --- Peak 1 (B ~ Q, 원본과 동일) ---
-xlswrite(fileName, Areaval1,       "Sheet1", "B");
-xlswrite(fileName, Asmooth1,       "Sheet1", "C");
-xlswrite(fileName, Aper1,          "Sheet1", "D");
-xlswrite(fileName, Apersmooth1,    "Sheet1", "E");
-
-xlswrite(fileName, Ival1,          "Sheet1", "F");
-xlswrite(fileName, Ismooth1,       "Sheet1", "G");
-xlswrite(fileName, Iper1,          "Sheet1", "H");
-xlswrite(fileName, Ipersmooth1,    "Sheet1", "I");
-
-xlswrite(fileName, qval1,          "Sheet1", "J");
-xlswrite(fileName, qsmooth1,       "Sheet1", "K");
-xlswrite(fileName, qper1,          "Sheet1", "L");
-xlswrite(fileName, qpersmooth1,    "Sheet1", "M");
-
-xlswrite(fileName, FWHM1,          "Sheet1", "N");
-xlswrite(fileName, FWHMsmooth1,    "Sheet1", "O");
-xlswrite(fileName, FWHMper1,       "Sheet1", "P");
-xlswrite(fileName, FWHMpersmooth1, "Sheet1", "Q");
-
-% --- Peak 2 (R ~ AG, 동일한 순서로 이어서) ---
-xlswrite(fileName, Areaval2,       "Sheet1", "R");
-xlswrite(fileName, Asmooth2,       "Sheet1", "S");
-xlswrite(fileName, Aper2,          "Sheet1", "T");
-xlswrite(fileName, Apersmooth2,    "Sheet1", "U");
-
-xlswrite(fileName, Ival2,          "Sheet1", "V");
-xlswrite(fileName, Ismooth2,       "Sheet1", "W");
-xlswrite(fileName, Iper2,          "Sheet1", "X");
-xlswrite(fileName, Ipersmooth2,    "Sheet1", "Y");
-
-xlswrite(fileName, qval2,          "Sheet1", "Z");
-xlswrite(fileName, qsmooth2,       "Sheet1", "AA");
-xlswrite(fileName, qper2,          "Sheet1", "AB");
-xlswrite(fileName, qpersmooth2,    "Sheet1", "AC");
-
-xlswrite(fileName, FWHM2,          "Sheet1", "AD");
-xlswrite(fileName, FWHMsmooth2,    "Sheet1", "AE");
-xlswrite(fileName, FWHMper2,       "Sheet1", "AF");
-xlswrite(fileName, FWHMpersmooth2, "Sheet1", "AG");
+ 
+% --- 출력 행렬 조립: 피크별 [Area Asm I Ism q qsm FWHM FWHMsm] 8열, 피크 순서로 ---
+outMat = [];
+header  = {};
+for k = 1:nPeak
+    outMat = [outMat, ...
+        Areaval(:,k),    Asmooth(:,k), ...
+        Ival(:,k),       Ismooth(:,k), ...
+        qval(:,k),       qsmooth(:,k), ...
+        FWHMval(:,k),    FWHMsmooth(:,k)];
+    header = [header, ...
+        {sprintf('Area_P%d',k),  sprintf('Area_sm_P%d',k), ...
+         sprintf('I_P%d',k),     sprintf('I_sm_P%d',k), ...
+         sprintf('q_P%d',k),     sprintf('q_sm_P%d',k), ...
+         sprintf('FWHM_P%d',k),  sprintf('FWHM_sm_P%d',k)}];
+end
+ 
+% 헤더(1행) + 데이터(2행부터) 한 번에 기록
+xlswrite(fileName, header, "Sheet1", "A1");
+xlswrite(fileName, outMat, "Sheet1", "A2");
