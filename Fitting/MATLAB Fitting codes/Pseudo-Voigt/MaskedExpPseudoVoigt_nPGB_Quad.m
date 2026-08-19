@@ -9,6 +9,7 @@
 % ---- 경로 설정 ----
 addpath('..');
 addpath('E:\20260726\results');
+addpath('E:\20260605_3C\results');
 % -------------------
 
 %%
@@ -16,14 +17,13 @@ addpath('E:\20260726\results');
 clear
 clc
 
-dataName = "PEDOT_300mN_1_1Dplotstack";
+dataName = "EG_3_1Dplotstack_qz";
 
-data = dataName+".csv";
-
-load data;
+fileName = sprintf('%s.csv', dataName);
+data = readmatrix(fileName);
 q = data(:,1);
 I = data(:,2:end);
-clear data
+clear data;
 N = size(I,2);
 %% accumulation
 accum = 10;
@@ -59,9 +59,9 @@ y = Is(:,targ);
 % parameter 파일 불러오기
 param_PV;
 
-% fittype (배경 전용 0 / 진짜 피크 + pGB)
-EqnBkg = makePVExpFittype(0);          % 배경만
-Eqn    = makePVExpFittype(nPeak + 1);  % 진짜 피크 + pGB 1개
+% fittype (배경 전용 0 / 진짜 피크 + pGB들)
+EqnBkg = makePVExpFittype(0);             % 배경만
+Eqn    = makePVExpFittype(nPeak + nPGB);  % 진짜 피크 + pGB (nPGB개)
 
 % 가우시안 피크 영역 가중치 (모든 피크 주변 부스트)
 weights = ones(size(x));
@@ -75,7 +75,7 @@ weights(gauss_region) = 10;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 exb = expBKG(x,pB(1),pB(2),pB(3));
 gb  = PV_varargin(x, pG_arr);
-gb_pGB = PV_varargin(x, pGB);
+gb_pGB = PV_varargin(x, pGB_arr);
 G = exb + gb + gb_pGB;
 
 figure(1);
@@ -92,7 +92,7 @@ y_max_all = max(Is(Is > 0), [], 'omitnan');
 param_PV;
 
 frame_start = 1;
-for ii = frame_start:40:Na
+for ii = frame_start:Na
     y     = Is(:,ii);
     y_log = log(y);
 
@@ -115,12 +115,12 @@ for ii = frame_start:40:Na
 
     % 현재 프레임의 초기 피크 위치·폭을 이용해 피크 구역 마스킹
     
-    % %{
+    %{
     peak_centers = pG_mat(:,2).';
     peak_fwhms   = pG_mat(:,3).';
     %}
 
-    %{
+    % %{
     if ii == frame_start
         peak_centers = pG_mat(:,2).';                    % 모든 피크의 초기 중심
         peak_fwhms   = pG_mat(:,3).';                    % 모든 피크의 초기 FWHM
@@ -197,9 +197,9 @@ for ii = frame_start:40:Na
     end
 
     % Step1 이후 생성된 pBf 및 bound 업데이트
-    initialparam2 = [pBf, pG_arr, pGB];
-    lb2 = [lb2_bkg, lbG_arr, lbGB];
-    ub2 = [ub2_bkg, ubG_arr, ubGB];
+    initialparam2 = [pBf, pG_arr, pGB_arr];
+    lb2 = [lb2_bkg, lbG_arr, lbGB_arr];
+    ub2 = [ub2_bkg, ubG_arr, ubGB_arr];
 
     try
         IS = fit(x, y_log, Eqn, ...
@@ -212,10 +212,10 @@ for ii = frame_start:40:Na
     catch ME_full
          % StepB(2) 실패 시 배경 tight bounds 없이 폴백
         warning('Frame %d StepB(2) failed (%s). Falling back to single-step.', ii, ME_full.message);
-        lb_fb = [lb_bkg, lbG_arr, lbGB];
-        ub_fb = [ub_bkg, ubG_arr, ubGB];
+        lb_fb = [lb_bkg, lbG_arr, lbGB_arr];
+        ub_fb = [ub_bkg, ubG_arr, ubGB_arr];
         IS = fit(x, y_log, Eqn, ...
-            'Start', [pB, pG_arr, pGB], ...
+            'Start', [pB, pG_arr, pGB_arr], ...
             'Lower', lb_fb, 'Upper', ub_fb, ...
             'Robust', 'LAR', ...
             'Exclude', exclude_idx, ...
@@ -227,8 +227,8 @@ for ii = frame_start:40:Na
 
     % ---- 시각화 ----
     exb    = expBKG(x, ISp(1), ISp(2), ISp(3));
-    gb_pG  = PV_varargin(x, ISp(4 : 3+4*nPeak));   % 진짜 피크만 (pGB 제외, 피크당 4param)
-    gb_pGB = PV_varargin(x, ISp(end-3:end));       % pGB 단독 (4param)
+    gb_pG  = PV_varargin(x, ISp(4 : 3+4*nPeak));       % 진짜 피크만 (pGB 제외, 피크당 4param)
+    gb_pGB = PV_varargin(x, ISp(3+4*nPeak+1 : end));   % pGB 전부 (nPGB개, 피크당 4param)
     gb     = gb_pG + gb_pGB;                        % 전체 피크 합
     G      = exb + gb;                              % 최종 (배경+전체)
 
@@ -289,8 +289,8 @@ for ii = frame_start:40:Na
     % ── 피크 파라미터(pG + pGB) 표 표시 (왼쪽 위 모서리 정렬) ──
     delete(findall(gcf, 'Tag', 'pGtable'));
     % ISp 배치: [b1 b2 b3, a1 m1 w1 e1, a2 m2 w2 e2, ...]
-    %   마지막 피크(nPeak+1번째)가 pGB
-    nTotalPk = nPeak + 1;
+    %   진짜 피크 nPeak개 뒤에 pGB nPGB개
+    nTotalPk = nPeak + nPGB;
     txtP = sprintf('%-5s %8s %7s %7s %6s\n', 'Peak', 'Amp', 'q', 'FWHM', 'eta');
     txtP = [txtP sprintf('%s\n', repmat('-', 1, 37))];
     for pk = 1:nTotalPk
@@ -302,7 +302,7 @@ for ii = frame_start:40:Na
         if pk <= nPeak
             name = sprintf('pG%d', pk);
         else
-            name = 'pGB';             % 마지막은 배경 보조
+            name = sprintf('pGB%d', pk - nPeak);   % 배경 보조 (pGB1, pGB2, ...)
         end
         txtP = [txtP sprintf('%-5s %8.3g %7.4f %7.4f %6.3f\n', name, A, mu, fw, eta)];
     end

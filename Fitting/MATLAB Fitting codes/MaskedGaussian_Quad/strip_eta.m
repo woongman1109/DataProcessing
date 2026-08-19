@@ -22,14 +22,18 @@ ubG_mat = reshape(ubG_arr, 4, []).';
 lbG_arr = reshape(lbG_mat(:, 1:3).', 1, []);   % eta 열 제거 후 평탄화
 ubG_arr = reshape(ubG_mat(:, 1:3).', 1, []);
 
-% --- pGB: eta(4번째) 제거 ---
-pGB  = pGB(1:3);
-lbGB = lbGB(1:3);
-ubGB = ubGB(1:3);
+% --- pGB: 4개씩 끊어 eta(4번째) 제거 후 재조립 (pGB 여러 개 대응) ---
+pGB_mat  = reshape(pGB_arr, 4, []).';     % nPGB×4
+lbGB_mat = reshape(lbGB_arr, 4, []).';
+ubGB_mat = reshape(ubGB_arr, 4, []).';
+nPGB     = size(pGB_mat, 1);
+pGB_arr  = reshape(pGB_mat(:, 1:3).', 1, []);    % eta 열 제거 후 평탄화
+lbGB_arr = reshape(lbGB_mat(:, 1:3).', 1, []);
+ubGB_arr = reshape(ubGB_mat(:, 1:3).', 1, []);
 
 % --- fittype 재생성: Gaussian 버전으로 ---
-EqnBkg = makeGaussExpFittype(0);          % 배경만
-Eqn    = makeGaussExpFittype(nPeak + 1);  % 진짜 피크 + pGB 1개
+EqnBkg = makeGaussExpFittype(0);             % 배경만
+Eqn    = makeGaussExpFittype(nPeak + nPGB);  % 진짜 피크 + pGB (nPGB개)
 
 % 정리
-clear lbG_mat ubG_mat
+clear lbG_mat ubG_mat pGB_mat lbGB_mat ubGB_mat

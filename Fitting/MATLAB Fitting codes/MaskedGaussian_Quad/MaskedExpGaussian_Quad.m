@@ -1,4 +1,3 @@
-% ---- 경로 설정 ----
 addpath('..');
 addpath('C:\Users\...\Fitting\MATLAB Fitting codes');
 % -------------------
@@ -52,8 +51,8 @@ param_PV;
 strip_eta;
 
 % 파라미터 배경 전용 fittype
-EqnBkg = makeGaussExpFittype(0);          % 배경만
-Eqn    = makeGaussExpFittype(nPeak + 1);  % 진짜 피크 + pGB 1개
+EqnBkg = makeGaussExpFittype(0);             % 배경만
+Eqn    = makeGaussExpFittype(nPeak + nPGB);  % 진짜 피크 + pGB (nPGB개)
 
 % 가우시안 피크 영역 가중치 (모든 피크 주변 부스트)
 weights = ones(size(x));
@@ -67,7 +66,7 @@ weights(gauss_region) = 10;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 exb = expBKG(x,pB(1),pB(2),pB(3));
 gb  = Gaussian_varargin(x, pG_arr);
-gb_pGB = Gaussian_varargin(x, pGB);
+gb_pGB = Gaussian_varargin(x, pGB_arr);
 G = exb + gb + gb_pGB;
 
 figure(1);
@@ -190,9 +189,9 @@ for ii = frame_start:40:Na
     end
 
     % Step1 이후 생성된 pBf 및 bound 업데이트
-    initialparam2 = [pBf, pG_arr, pGB];
-    lb2 = [lb2_bkg, lbG_arr, lbGB];
-    ub2 = [ub2_bkg, ubG_arr, ubGB];
+    initialparam2 = [pBf, pG_arr, pGB_arr];
+    lb2 = [lb2_bkg, lbG_arr, lbGB_arr];
+    ub2 = [ub2_bkg, ubG_arr, ubGB_arr];
 
     try
         IS = fit(x, y_log, Eqn, ...
@@ -205,10 +204,10 @@ for ii = frame_start:40:Na
     catch ME_full
          % StepB(2) 실패 시 배경 tight bounds 없이 폴백
         warning('Frame %d StepB(2) failed (%s). Falling back to single-step.', ii, ME_full.message);
-        lb_fb = [lb_bkg, lbG_arr, lbGB];
-        ub_fb = [ub_bkg, ubG_arr, ubGB];
+        lb_fb = [lb_bkg, lbG_arr, lbGB_arr];
+        ub_fb = [ub_bkg, ubG_arr, ubGB_arr];
         IS = fit(x, y_log, Eqn, ...
-            'Start', [pB, pG_arr, pGB], ...
+            'Start', [pB, pG_arr, pGB_arr], ...
             'Lower', lb_fb, 'Upper', ub_fb, ...
             'Robust', 'LAR', ...
             'Exclude', exclude_idx, ...
@@ -220,8 +219,8 @@ for ii = frame_start:40:Na
 
     % ---- 시각화 ----
     exb    = expBKG(x, ISp(1), ISp(2), ISp(3));
-    gb_pG  = Gaussian_varargin(x, ISp(4 : 3+3*nPeak));   % 진짜 피크만 (pGB 제외)
-    gb_pGB = Gaussian_varargin(x, ISp(end-2:end));       % pGB 단독
+    gb_pG  = Gaussian_varargin(x, ISp(4 : 3+3*nPeak));       % 진짜 피크만 (pGB 제외)
+    gb_pGB = Gaussian_varargin(x, ISp(3+3*nPeak+1 : end));   % pGB 전부 (nPGB개)
     gb     = gb_pG + gb_pGB;                             % 전체 Gaussian 합
     G      = exb + gb;                                   % 최종 (배경+전체)
 
@@ -282,8 +281,8 @@ for ii = frame_start:40:Na
     % ── 피크 파라미터(pG + pGB) 표 표시 (왼쪽 위 모서리 정렬) ──
     delete(findall(gcf, 'Tag', 'pGtable'));
     % ISp 배치: [b1 b2 b3, a1 m1 w1, a2 m2 w2, ...]
-    %   마지막 피크(nPeak+1번째)가 pGB
-    nTotalPk = nPeak + 1;
+    %   진짜 피크 nPeak개 뒤에 pGB nPGB개
+    nTotalPk = nPeak + nPGB;
     txtP = sprintf('%-5s %8s %7s %7s\n', 'Peak', 'Amp', 'q', 'FWHM');
     txtP = [txtP sprintf('%s\n', repmat('-', 1, 37))];
     for pk = 1:nTotalPk
@@ -294,7 +293,7 @@ for ii = frame_start:40:Na
         if pk <= nPeak
             name = sprintf('pG%d', pk);
         else
-            name = 'pGB';             % 마지막은 배경 보조
+            name = sprintf('pGB%d', pk - nPeak);   % 배경 보조 (pGB1, pGB2, ...)
         end
         txtP = [txtP sprintf('%-5s %8.3g %7.4f %7.4f\n', name, A, mu, fw)];
     end
