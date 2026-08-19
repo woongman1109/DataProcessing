@@ -6,17 +6,25 @@
 %  파라미터 배치: [b1 b2 b3, a1 m1 w1 e1, a2 m2 w2 e2, ...]
 % ============================================================
 
+% ---- 경로 설정 ----
+addpath('..');
+addpath('E:\20260726\results');
+addpath('E:\20260605_3C\results');
+% -------------------
+
+%%
 % file load
 clear
 clc
 
-dataName = "PEDOT_3_1Dplotstack_qz_forfit";
-load PEDOT_3_1Dplotstack_qz_forfit.csv
-q = PEDOT_3_1Dplotstack_qz_forfit(:,1);
-I = PEDOT_3_1Dplotstack_qz_forfit(:,2:end);
-clear PEDOT_3_1Dplotstack_qz_forfit
+dataName = "EG_3_1Dplotstack_qz";
+
+fileName = sprintf('%s.csv', dataName);
+data = readmatrix(fileName);
+q = data(:,1);
+I = data(:,2:end);
+clear data;
 N = size(I,2);
-addpath('..');
 %% accumulation
 accum = 10;
 exp_time = 6;
@@ -84,7 +92,7 @@ y_max_all = max(Is(Is > 0), [], 'omitnan');
 param_PV;
 
 frame_start = 1;
-for ii = frame_start:40:Na
+for ii = frame_start:Na
     y     = Is(:,ii);
     y_log = log(y);
 
@@ -107,12 +115,12 @@ for ii = frame_start:40:Na
 
     % 현재 프레임의 초기 피크 위치·폭을 이용해 피크 구역 마스킹
     
-    % %{
+    %{
     peak_centers = pG_mat(:,2).';
     peak_fwhms   = pG_mat(:,3).';
     %}
 
-    %{
+    % %{
     if ii == frame_start
         peak_centers = pG_mat(:,2).';                    % 모든 피크의 초기 중심
         peak_fwhms   = pG_mat(:,3).';                    % 모든 피크의 초기 FWHM

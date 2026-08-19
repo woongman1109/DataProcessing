@@ -8,11 +8,13 @@ addpath('C:\Users\...\Fitting\MATLAB Fitting codes');
 clear
 clc
 
-dataName = "PEDOT_3_1Dplotstack_qz_forfit";
-load PEDOT_3_1Dplotstack_qz_forfit.csv
-q = PEDOT_3_1Dplotstack_qz_forfit(:,1);
-I = PEDOT_3_1Dplotstack_qz_forfit(:,2:end);
-clear PEDOT_3_1Dplotstack_qz_forfit
+dataName = "PEDOT_300mN_1_1Dplotstack";
+
+fileName = sprintf('%s.csv', dataName);
+data = readmatrix(fileName);
+q = data(:,1);
+I = data(:,2:end);
+clear data;
 N = size(I,2);
 %% accumulation
 accum = 10;
