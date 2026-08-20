@@ -17,7 +17,7 @@ addpath('E:\20260605_3C\results');
 clear
 clc
 
-dataName = "EG_3_1Dplotstack_qz";
+dataName = "PEDOT_0wt_1_1Dplotstack_MaxNorm";
 
 fileName = sprintf('%s.csv', dataName);
 data = readmatrix(fileName);
@@ -57,7 +57,7 @@ x = qs;
 y = Is(:,targ);
 
 % parameter 파일 불러오기
-param_PV;
+param_PV_Normalized;
 
 % fittype (배경 전용 0 / 진짜 피크 + pGB들)
 EqnBkg = makePVExpFittype(0);             % 배경만
@@ -75,21 +75,24 @@ weights(gauss_region) = 10;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 exb = expBKG(x,pB(1),pB(2),pB(3));
 gb  = PV_varargin(x, pG_arr);
-gb_pGB = PV_varargin(x, pGB_arr);
-G = exb + gb + gb_pGB;
+pGB = PV_varargin(x, pGB_arr);
+G = exb + gb + pGB;
 
+clf;
 figure(1);
 plot(x,y,'-ok'); hold on
 plot(x,exb); hold on
 plot(x,gb); hold on
+plot(x,pGB); hold on
 plot(x,G); hold off
+legend('raw','exb','gb','pGB','G','Location','best');
 
 %%
 % ------ y축 범위 고정 ----- %
 y_max_all = max(Is(Is > 0), [], 'omitnan');
 
 % 파라미터 파일 재확인 (수동 피팅용)
-param_PV;
+param_PV_Normalized;
 
 frame_start = 1;
 for ii = frame_start:Na
@@ -259,7 +262,7 @@ for ii = frame_start:Na
     plot(x, gb, '--', 'Color', [0 0.2 0.7], 'LineWidth', 1.5);      % gb 단독
     plot(x, G, 'LineWidth', 1.5); hold off
     ylim([0, y_max_all*1.02]);
-    title(num2str(ii));
+    title(sprintf('%s / %d [%.1f %%]',num2str(ii), Na, 100*ii/Na));
 
     % ── pB 피팅 결과 + 경계를 표로 표시 (오른쪽 위 모서리 정렬) ──
     delete(findall(gcf, 'Tag', 'pBtable'));
@@ -330,7 +333,7 @@ Areaval = zeros(Na, nPeak);
 Ival    = zeros(Na, nPeak);
 qval    = zeros(Na, nPeak);
 FWHMval = zeros(Na, nPeak);
-for k = 1:nPeak
+for k = 1:nTotalPk
     base = 4*k;                         % k번째 피크 amp 위치
     for ii = 1:Na
         Areaval(ii,k) = sum(PV_varargin(x, parameter(ii, base:base+3)));
@@ -341,43 +344,66 @@ for k = 1:nPeak
 end
  
 % --- smoothing (지표별로 피크 전체를 한 번에) ---
-Asmooth    = zeros(Na, nPeak);
-Ismooth    = zeros(Na, nPeak);
-qsmooth    = zeros(Na, nPeak);
-FWHMsmooth = zeros(Na, nPeak);
-for k = 1:nPeak
+Asmooth    = zeros(Na, nTotalPk);
+Ismooth    = zeros(Na, nTotalPk);
+qsmooth    = zeros(Na, nTotalPk);
+FWHMsmooth = zeros(Na, nTotalPk);
+for k = 1:nTotalPk
     Asmooth(:,k)    = smooth(times, Areaval(:,k), 0.15, 'loess');
     Ismooth(:,k)    = smooth(times, Ival(:,k),    0.15, 'loess');
     qsmooth(:,k)    = smooth(times, qval(:,k),    0.15, 'loess');
     FWHMsmooth(:,k) = smooth(times, FWHMval(:,k), 0.15, 'loess');
 end
- 
+
+col_raw_pG = [0 0.447 0.741];
+col_sm_pG = [0.85 0.325 0.098];
+col_raw_pGB = [0.85 0 0];
+col_sm_pGB = [1 0.5 0.5];
+
+raw_cols = cell(1, nTotalPk);
+sm_cols = cell(1, nTotalPk);
+pkNames = cell(1, nTotalPk);
+
+for k = 1:nTotalPk
+    if k <= nPeak
+        raw_cols{k} = col_raw_pG;   sm_cols{k} = col_sm_pG;
+        pkNames{k} = sprintf('pG%d', k);
+    else
+        raw_cols{k} = col_raw_pGB;   sm_cols{k} = col_sm_pGB;
+        pkNames{k} = sprintf('pG%d', k-nPeak);
+    end
+end
+
 figure('Name', 'Value Analysis');
-t1 = tiledlayout(4, nPeak, 'TileSpacing', 'compact', 'Padding', 'compact');
+t1 = tiledlayout(4, nTotalPk, 'TileSpacing', 'compact', 'Padding', 'compact');
  
 % Row 1: Area
-for k = 1:nPeak
+for k = 1:nTotalPk
     nexttile;
-    plot(times, Areaval(:,k)); hold on; plot(times, Asmooth(:,k)); hold off
-    axis tight; xlabel('time, min'); ylabel('Area'); title(sprintf('Area — Peak %d', k));
+    plot(times, Areaval(:,k), 'Color', raw_cols{k}); hold on; 
+    plot(times, Asmooth(:,k), 'Color', sm_cols{k}); hold off
+    axis tight; xlabel('time, min'); ylabel('Area'); title(sprintf('Area — Peak %s', pkNames{k}));
 end
 % Row 2: Peak Intensity
-for k = 1:nPeak
+for k = 1:nTotalPk
     nexttile;
-    plot(times, Ival(:,k)); hold on; plot(times, Ismooth(:,k)); hold off
-    axis tight; xlabel('time, min'); ylabel('I'); title(sprintf('Peak Intensity — Peak %d', k));
+    plot(times, Ival(:,k), 'Color', raw_cols{k}); hold on; 
+    plot(times, Ismooth(:,k), 'Color', sm_cols{k}); hold off
+    axis tight; xlabel('time, min'); ylabel('I'); title(sprintf('Peak Intensity — Peak %s', pkNames{k}));
 end
 % Row 3: Q Position
-for k = 1:nPeak
+for k = 1:nTotalPk
     nexttile;
-    plot(times, qval(:,k)); hold on; plot(times, qsmooth(:,k)); hold off
-    axis tight; xlabel('time, min'); ylabel('q, A^{-1}'); title(sprintf('Q Position — Peak %d', k));
+    plot(times, qval(:,k), 'Color', raw_cols{k}); hold on; 
+    plot(times, qsmooth(:,k), 'Color', sm_cols{k}); hold off
+    axis tight; xlabel('time, min'); ylabel('q, A^{-1}'); title(sprintf('Q Position — Peak %s', pkNames{k}));
 end
 % Row 4: FWHM
-for k = 1:nPeak
+for k = 1:nTotalPk
     nexttile;
-    plot(times, FWHMval(:,k)); hold on; plot(times, FWHMsmooth(:,k)); hold off
-    axis tight; xlabel('time, min'); ylabel('FWHM, A^{-1}'); title(sprintf('FWHM — Peak %d', k));
+    plot(times, FWHMval(:,k), 'Color', raw_cols{k}); hold on; 
+    plot(times, FWHMsmooth(:,k), 'Color', sm_cols{k}); hold off
+    axis tight; xlabel('time, min'); ylabel('FWHM, A^{-1}'); title(sprintf('FWHM — Peak %s', pkNames{k}));
 end
  
 title(t1, 'Calculated Values (Raw vs Smooth)');
