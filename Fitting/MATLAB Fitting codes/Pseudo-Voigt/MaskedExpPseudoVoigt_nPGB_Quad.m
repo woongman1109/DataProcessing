@@ -17,7 +17,7 @@ addpath('E:\20260605_3C\results');
 clear
 clc
 
-dataName = "PEDOT_0wt_1_1Dplotstack_MaxNorm";
+dataName = "EG_2_1Dplotstack_qz";
 
 fileName = sprintf('%s.csv', dataName);
 data = readmatrix(fileName);
@@ -26,7 +26,7 @@ I = data(:,2:end);
 clear data;
 N = size(I,2);
 %% accumulation
-accum = 10;
+accum = 5;
 exp_time = 6;
 Na = N/accum;
 Ia = zeros(length(q),Na);
@@ -57,7 +57,7 @@ x = qs;
 y = Is(:,targ);
 
 % parameter 파일 불러오기
-param_PV_Normalized;
+param_movingBounds_PV_EG_2_qz_forfit;
 
 % fittype (배경 전용 0 / 진짜 피크 + pGB들)
 EqnBkg = makePVExpFittype(0);             % 배경만
@@ -92,10 +92,12 @@ legend('raw','exb','gb','pGB','G','Location','best');
 y_max_all = max(Is(Is > 0), [], 'omitnan');
 
 % 파라미터 파일 재확인 (수동 피팅용)
-param_PV_Normalized;
+param_movingBounds_PV_EG_2_qz_forfit;
 
-frame_start = 1;
-for ii = frame_start:Na
+idx = [1:20:501];
+j = 0;
+for ii = idx
+    j = j+1;
     y     = Is(:,ii);
     y_log = log(y);
 
@@ -124,15 +126,18 @@ for ii = frame_start:Na
     %}
 
     % %{
-    if ii == frame_start
-        peak_centers = pG_mat(:,2).';                    % 모든 피크의 초기 중심
-        peak_fwhms   = pG_mat(:,3).';                    % 모든 피크의 초기 FWHM
+    if ii == idx(1)
+        ig_pG = pG_mat;
     else
-        % parameter 열: [b1 b2 b3, a1 m1 w1 e1, a2 m2 w2 e2, ...]
-        % k번째 피크 mean = 4k+1, FWHM = 4k+2
-        peak_centers = parameter(ii-1, 4*(1:nPeak)+1);   % 이전 프레임 중심들 (5,9,13,17열)
-        peak_fwhms   = parameter(ii-1, 4*(1:nPeak)+2);   % 이전 프레임 FWHM들 (6,10,14,18열)
+        ig_pG = reshape(parameter(j-1, 4:3+4*nPeak), 4, nPeak).';   % k → j
     end
+    peak_centers = ig_pG(:,2).';
+    peak_fwhms   = ig_pG(:,3).';
+    
+    [lbG_arr, ubG_arr] = bounds_from_ig(ig_pG, pG_ampLBratio, pG_ampUBratio, ...
+                                         pG_meanLBdelta, pG_meanUBdelta, ...
+                                         pG_fwhmLBdelta, pG_fwhmUBdelta, ...
+                                     pG_etaLB, pG_etaUB);
     %}
 
     peak_mask = false(size(x));
@@ -200,7 +205,8 @@ for ii = frame_start:Na
     end
 
     % Step1 이후 생성된 pBf 및 bound 업데이트
-    initialparam2 = [pBf, pG_arr, pGB_arr];
+    ig_pG_arr = reshape(ig_pG.', 1, []);
+    initialparam2 = [pBf, ig_pG_arr, pGB_arr];
     lb2 = [lb2_bkg, lbG_arr, lbGB_arr];
     ub2 = [ub2_bkg, ubG_arr, ubGB_arr];
 
@@ -226,7 +232,7 @@ for ii = frame_start:Na
     end
 
     ISp = coeffvalues(IS);
-    parameter(ii,:) = ISp;
+    parameter(j,:) = ISp;
 
     % ---- 시각화 ----
     exb    = expBKG(x, ISp(1), ISp(2), ISp(3));
@@ -325,18 +331,18 @@ end
 %% Value plot (4x nPeak 배치: 행=지표, 열=피크)
 % parameter 열: [b1 b2 b3, a1 m1 w1 e1, a2 m2 w2 e2, ...]
 %   k번째 피크: amp=4k, mean=4k+1, FWHM=4k+2, eta=4k+3
-times = (1:Na).*((exp_time*accum)/60);
-times = times(:);
+nFrames = size(parameter,1);
+times = idx(:) .* ((exp_time*accum)/60);
  
 % --- 각 피크별 지표를 행렬로 추출 (열 = 피크) ---
-Areaval = zeros(Na, nPeak);
-Ival    = zeros(Na, nPeak);
-qval    = zeros(Na, nPeak);
-FWHMval = zeros(Na, nPeak);
+Areaval = zeros(nFrames, nPeak);
+Ival    = zeros(nFrames, nPeak);
+qval    = zeros(nFrames, nPeak);
+FWHMval = zeros(nFrames, nPeak);
 for k = 1:nTotalPk
     base = 4*k;                         % k번째 피크 amp 위치
-    for ii = 1:Na
-        Areaval(ii,k) = sum(PV_varargin(x, parameter(ii, base:base+3)));
+    for row = 1:nFrames
+        Areaval(row,k) = sum(PV_varargin(x, parameter(row, base:base+3)));
     end
     Ival(:,k)    = parameter(:, base);      % amplitude
     qval(:,k)    = parameter(:, base+1);    % mean
@@ -344,10 +350,10 @@ for k = 1:nTotalPk
 end
  
 % --- smoothing (지표별로 피크 전체를 한 번에) ---
-Asmooth    = zeros(Na, nTotalPk);
-Ismooth    = zeros(Na, nTotalPk);
-qsmooth    = zeros(Na, nTotalPk);
-FWHMsmooth = zeros(Na, nTotalPk);
+Asmooth    = zeros(nFrames, nTotalPk);
+Ismooth    = zeros(nFrames, nTotalPk);
+qsmooth    = zeros(nFrames, nTotalPk);
+FWHMsmooth = zeros(nFrames, nTotalPk);
 for k = 1:nTotalPk
     Asmooth(:,k)    = smooth(times, Areaval(:,k), 0.15, 'loess');
     Ismooth(:,k)    = smooth(times, Ival(:,k),    0.15, 'loess');
@@ -370,7 +376,7 @@ for k = 1:nTotalPk
         pkNames{k} = sprintf('pG%d', k);
     else
         raw_cols{k} = col_raw_pGB;   sm_cols{k} = col_sm_pGB;
-        pkNames{k} = sprintf('pG%d', k-nPeak);
+        pkNames{k} = sprintf('pGB%d', k-nPeak);
     end
 end
 
@@ -409,18 +415,19 @@ end
 title(t1, 'Calculated Values (Raw vs Smooth)');
  
 %%
-save parameter.mat parameter
- 
+save parameter.mat parameter idx
+
 % Save total fitted data as .xlsx file
 tmpFN = strcat("fitted_", dataName);
 fileName = strcat(tmpFN, ".xlsx");
- 
-% 시간축 (Sheet2)
-xlswrite(fileName, times, "Sheet2", "A");
- 
+
+% 시간축 + 실제 프레임 번호 (Sheet2)
+xlswrite(fileName, {'FrameIdx','Time_min'}, "Sheet2", "A1");
+xlswrite(fileName, [idx(:), times], "Sheet2", "A2");
+
 % --- 출력 행렬 조립: 피크별 [Area Asm I Ism q qsm FWHM FWHMsm] 8열, 피크 순서로 ---
-outMat = [];
-header  = {};
+outMat = idx(:);                     % ★ 첫 열에 실제 프레임 번호
+header  = {'FrameIdx'};              % ★ 헤더도 맞춰서 추가
 for k = 1:nPeak
     outMat = [outMat, ...
         Areaval(:,k),    Asmooth(:,k), ...
@@ -433,7 +440,7 @@ for k = 1:nPeak
          sprintf('q_P%d',k),     sprintf('q_sm_P%d',k), ...
          sprintf('FWHM_P%d',k),  sprintf('FWHM_sm_P%d',k)}];
 end
- 
+
 % 헤더(1행) + 데이터(2행부터) 한 번에 기록
 xlswrite(fileName, header, "Sheet1", "A1");
 xlswrite(fileName, outMat, "Sheet1", "A2");

@@ -200,7 +200,11 @@ def pick_region_detail(x, y, init_peak_pos, region_idx, n_regions, sheet_title="
 
     def update_range_display(lb, ub):
         range_state['lb'], range_state['ub'] = lb, ub
-        xy = span.get_xy(); xy[:, 0] = [lb, lb, ub, ub, lb]; span.set_xy(xy)
+        if hasattr(span, 'set_width'):      # matplotlib >= 3.9 (Rectangle)
+            span.set_x(lb)
+            span.set_width(ub - lb)
+        else:                               # matplotlib < 3.9 (Polygon)
+            xy = span.get_xy(); xy[:, 0] = [lb, lb, ub, ub, lb]; span.set_xy(xy)
         vl_lb.set_xdata([lb]); vl_ub.set_xdata([ub])
         range_text.set_text(f'Range: [{lb:.4f}, {ub:.4f}]')
         fig.canvas.draw_idle()
